@@ -30,6 +30,7 @@ func SetupRouter(
 	router.GET("/health", healthCtrl.HealthCheck)
 
 	// Swagger documentation
+	// 注册 Swagger 路由
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	apiV1 := router.Group("/api/v1")

@@ -1,3 +1,18 @@
+# 参考
+https://github.com/pengfeidai/gin-app-start
+
+改动：
+
+1. 优化zap日志打印
+2. 部分代码添加注释
+3. 添加config.local.yaml文件
+4. 修复air工具使用说明问题
+
+
+
+<hr>
+
+
 # Gin App Start
 
 基于 [Gin](https://github.com/gin-gonic/gin) 框架的现代化 Go Web 应用脚手架，遵循清晰的分层架构设计，支持 PostgreSQL 和 Redis。
@@ -56,8 +71,8 @@ gin-app-start/
 ### 环境要求
 
 - Go >= 1.24
-- PostgreSQL >= 12
-- Redis >= 6.0
+- PostgreSQL >= 17
+- Redis >= 7.0
 
 ### 安装依赖
 
@@ -89,13 +104,13 @@ database:
 
 ```bash
 # 本地环境
-SERVER_ENV=local go run cmd/server/main.go
+export SERVER_ENV=local && go run cmd/server/main.go
 
 # 开发环境
-SERVER_ENV=dev go run cmd/server/main.go
+export SERVER_ENV=dev && go run cmd/server/main.go
 
 # 生产环境
-SERVER_ENV=prod go run cmd/server/main.go
+export SERVER_ENV=prod &&  go run cmd/server/main.go
 ```
 
 ### 健康检查

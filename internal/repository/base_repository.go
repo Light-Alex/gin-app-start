@@ -32,7 +32,11 @@ func (r *BaseRepository[T]) Update(ctx context.Context, entity *T) error {
 }
 
 func (r *BaseRepository[T]) Delete(ctx context.Context, id uint) error {
+	// 软删除
 	return r.db.WithContext(ctx).Delete(new(T), id).Error
+
+	// 硬删除（谨慎使用）
+	// return r.db.WithContext(ctx).Unscoped().Delete(new(T), id).Error
 }
 
 func (r *BaseRepository[T]) List(ctx context.Context, offset, limit int) ([]*T, error) {

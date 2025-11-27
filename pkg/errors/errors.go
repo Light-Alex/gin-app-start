@@ -5,7 +5,7 @@ import "fmt"
 type BusinessError struct {
 	Code    int
 	Message string
-	Cause   error
+	Cause   error // 导致错误的原始错误
 }
 
 func (e *BusinessError) Error() string {

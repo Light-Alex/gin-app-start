@@ -248,12 +248,35 @@ curl http://localhost:9060/health
 安装 Air 工具后，可以实现代码自动重新编译和重启：
 
 ```bash
+# 使用 go 1.25 或更高版本
 # 安装 Air
-go install github.com/cosmtrek/air@latest
+go install github.com/air-verse/air@latest
 
-# 使用 Air 运行（代码变更自动重启）
+# 在项目根目录执行，初始化 Air 配置文件，会在项目根目录生成 .air.toml 文件
+air init
+
+# 修改.air.toml 文件，根据实际情况调整
+vim .air.toml
+cmd = "go build -o ./tmp/main cmd/server/main.go"
+
+# 在项目根目录使用 Air 运行（代码变更自动重启）
 air
 
+# ========================================================================
+# 使用 go 1.24 或更高版本:
+go get -tool github.com/air-verse/air@latest
+
+# 在项目根目录执行，初始化 Air 配置文件，会在项目根目录生成 .air.toml 文件
+go tool air init
+
+# 修改.air.toml 文件，根据实际情况调整
+vim .air.toml
+cmd = "go build -o ./tmp/main cmd/server/main.go"
+
+# 在项目根目录使用 Air 运行（代码变更自动重启）
+go tool air
+
+# ========================================================================
 # 或使用 Makefile
 make dev
 ```

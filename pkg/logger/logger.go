@@ -19,9 +19,15 @@ func Init(env string, logFile string) error {
 		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {
 		config = zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+		// 为不同级别的日志添加颜色
+		// config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
 		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	}
+
+	// 将日志级别以大写字母的形式显示
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 
 	if logFile != "" {
 		// Ensure the log directory exists
@@ -110,4 +116,3 @@ func init() {
 		globalLogger = logger
 	}
 }
-

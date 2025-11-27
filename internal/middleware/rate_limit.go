@@ -9,12 +9,13 @@ import (
 )
 
 type rateLimiter struct {
-	rate       int
-	lastAccess map[string]time.Time
-	tokens     map[string]int
-	mu         sync.Mutex
+	rate       int                  // 每秒允许的请求数
+	lastAccess map[string]time.Time // 记录每个客户端的最后访问时间
+	tokens     map[string]int       // 记录每个客户端当前可用的令牌数
+	mu         sync.Mutex           // 互斥锁，用于保护对 lastAccess 和 tokens 的并发访问
 }
 
+// newRateLimiter 创建一个新的速率限制器
 func newRateLimiter(rate int) *rateLimiter {
 	limiter := &rateLimiter{
 		rate:       rate,
@@ -27,6 +28,8 @@ func newRateLimiter(rate int) *rateLimiter {
 	return limiter
 }
 
+// allow 检查是否允许当前请求
+// 基于令牌桶算法的速率限制
 func (rl *rateLimiter) allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -34,13 +37,18 @@ func (rl *rateLimiter) allow(key string) bool {
 	now := time.Now()
 	lastTime, exists := rl.lastAccess[key]
 
+	// 如果是第一次访问，初始化令牌数为 rate - 1
 	if !exists {
 		rl.lastAccess[key] = now
 		rl.tokens[key] = rl.rate - 1
 		return true
 	}
 
+	// 计算距离上次访问经过了多少秒
 	elapsed := now.Sub(lastTime).Seconds()
+
+	// 计算距离上次访问经过了多少秒，将其转换为令牌数
+	// 若rate=100（每秒最多100次请求），elapsed < 0.01s，tokensToAdd = 0
 	tokensToAdd := int(elapsed * float64(rl.rate))
 
 	if tokensToAdd > 0 {
@@ -59,10 +67,12 @@ func (rl *rateLimiter) allow(key string) bool {
 	return false
 }
 
+// cleanup 定期清理过期的访问记录
 func (rl *rateLimiter) cleanup() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute) // 每分钟执行一次清理
 	defer ticker.Stop()
 
+	// 清理过期的访问记录，保留最近 5 分钟内的记录
 	for range ticker.C {
 		rl.mu.Lock()
 		now := time.Now()

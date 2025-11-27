@@ -20,7 +20,7 @@ func Recovery() gin.HandlerFunc {
 				)
 
 				response.Error(c, 50000, "Internal server error")
-				c.Abort()
+				c.Abort() // 终止当前请求的后续处理，防止 panic 后的代码继续执行导致更多问题
 			}
 		}()
 		c.Next()

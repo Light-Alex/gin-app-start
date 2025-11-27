@@ -76,8 +76,8 @@ func Load() (*Config, error) {
 	viper.AddConfigPath("./config")
 	viper.AddConfigPath(".")
 
+	// 自动检查环境变量是否与现有的配置键匹配
 	viper.AutomaticEnv()
-
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -95,4 +95,3 @@ func Load() (*Config, error) {
 func GetConfig() *Config {
 	return GlobalConfig
 }
-

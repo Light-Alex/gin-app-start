@@ -55,6 +55,20 @@ func (r *userRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 	return &user, nil
 }
 
+// List 分页查询用户列表
+//
+// 该方法实现了用户数据的分页查询功能，支持分页参数和总数统计，
+// 适用于前端表格展示、数据导出等需要分页的场景。
+//
+// 参数:
+//   - ctx: 上下文，用于超时控制、取消操作等
+//   - offset: 偏移量，表示跳过的记录数（从0开始）
+//   - limit: 每页记录数，控制返回的用户数量
+//
+// 返回值:
+//   - []*model.User: 用户列表切片，包含查询到的用户数据
+//   - int64: 用户总数，用于前端分页组件计算总页数
+//   - error: 错误信息，成功时为nil
 func (r *userRepository) List(ctx context.Context, offset, limit int) ([]*model.User, int64, error) {
 	var users []*model.User
 	var total int64

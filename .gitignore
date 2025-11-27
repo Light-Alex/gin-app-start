@@ -33,7 +33,7 @@ logs/
 *.log
 
 # Config
-config.local.yaml
+# config.local.yaml
 .env
 
 # Build

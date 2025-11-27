@@ -22,7 +22,8 @@ type User struct {
 }
 
 func (User) TableName() string {
-	return "users"
+	// return "users"
+	return "app_schema.users" // 指定schema为app_schema；PostgreSQL格式: schema.table_name
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
@@ -38,4 +39,3 @@ func (u *User) BeforeUpdate(tx *gorm.DB) error {
 	u.UpdateAt = time.Now()
 	return nil
 }
-

@@ -16,7 +16,7 @@ func Logger() gin.HandlerFunc {
 
 		c.Next()
 
-		latency := time.Since(start)
+		latency := time.Since(start) // 计算请求处理耗时
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		statusCode := c.Writer.Status()

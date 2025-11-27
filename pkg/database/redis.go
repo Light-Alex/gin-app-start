@@ -53,4 +53,3 @@ func CloseRedis() error {
 func GetRedisClient() *redis.Client {
 	return RedisClient
 }
-

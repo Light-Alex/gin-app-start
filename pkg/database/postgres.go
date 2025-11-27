@@ -42,6 +42,7 @@ func NewPostgresDB(config *PostgresConfig) (*gorm.DB, error) {
 		logLevel = logger.Info
 	}
 
+	// 初始化数据库连接
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logLevel),
 		NowFunc: func() time.Time {
@@ -53,11 +54,13 @@ func NewPostgresDB(config *PostgresConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	// 获取SQL数据库连接实例
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database instance: %w", err)
 	}
 
+	// 设置数据库连接池参数
 	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
 	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
 	if config.MaxLifetime > 0 {
@@ -86,4 +89,3 @@ func Close() error {
 func GetDB() *gorm.DB {
 	return DB
 }
-
