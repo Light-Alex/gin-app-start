@@ -23,9 +23,9 @@ func RandomString(length int) string {
 	return string(b)
 }
 
-func Contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
+func Contains[T comparable](slice []T, target T) bool {
+	for _, item := range slice {
+		if item == target {
 			return true
 		}
 	}

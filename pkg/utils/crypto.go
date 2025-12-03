@@ -25,4 +25,3 @@ func HashPassword(password, salt string) string {
 func VerifyPassword(password, salt, hashedPassword string) bool {
 	return HashPassword(password, salt) == hashedPassword
 }
-

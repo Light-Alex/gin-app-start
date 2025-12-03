@@ -1,5 +1,9 @@
 version: '3.8'
 
+networks:
+  kafka-net:
+    driver: bridge
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -33,6 +37,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
+  kafka:
+    image: bitnami/kafka:latest
+    hostname: kafka
+    container_name: gin-app-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    volumes:
+      - kafka-data:/bitnami/kafka/data
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://192.168.140.128:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_LOG_DIRS: /bitnami/kafka/data
+      ALLOW_PLAINTEXT_LISTENER: yes
+    healthcheck:
+      test: [ "CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "localhost:9092" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
     build: .
@@ -59,3 +91,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  kafka-data:

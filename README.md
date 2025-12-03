@@ -76,6 +76,7 @@ gin-app-start/
 - Go >= 1.24
 - PostgreSQL >= 17
 - Redis >= 7.0
+- Kafka >= 4.0
 
 ### 安装依赖
 
