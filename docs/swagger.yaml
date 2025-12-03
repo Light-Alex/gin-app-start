@@ -1,6 +1,21 @@
 basePath: /
 definitions:
-  gin-app-start_internal_dto.CreateUserRequest:
+  dto.CreateOrderRequest:
+    properties:
+      description:
+        example: Order for John Doe
+        type: string
+      total_price:
+        example: 99.99
+        type: number
+      user_id:
+        example: 1
+        type: integer
+    required:
+    - total_price
+    - user_id
+    type: object
+  dto.CreateUserRequest:
     properties:
       email:
         example: john@example.com
@@ -22,7 +37,22 @@ definitions:
     - password
     - username
     type: object
-  gin-app-start_internal_dto.UpdateUserRequest:
+  dto.UpdateOrderRequest:
+    properties:
+      description:
+        example: Order for John Doe
+        type: string
+      status:
+        enum:
+        - 0
+        - 1
+        example: 1
+        type: integer
+      total_price:
+        example: 99.99
+        type: number
+    type: object
+  dto.UpdateUserRequest:
     properties:
       avatar:
         example: https://example.com/avatar.jpg
@@ -40,7 +70,7 @@ definitions:
         example: 1
         type: integer
     type: object
-  gin-app-start_pkg_response.Response:
+  response.Response:
     properties:
       code:
         example: 0
@@ -67,6 +97,168 @@ info:
   title: Gin App API
   version: "1.0"
 paths:
+  /api/v1/orders:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of orders
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: List orders
+      tags:
+      - orders
+    post:
+      consumes:
+      - application/json
+      description: Create a new order with user_id, total_price, description
+      parameters:
+      - description: Order information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Create a new order
+      tags:
+      - orders
+  /api/v1/orders/{order_number}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete order by order_number
+      parameters:
+      - description: Order Number
+        in: path
+        name: order_number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Delete order
+      tags:
+      - orders
+    get:
+      consumes:
+      - application/json
+      description: Get order information by order_number
+      parameters:
+      - description: Order Number
+        in: path
+        name: order_number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get order by order_number
+      tags:
+      - orders
+    put:
+      consumes:
+      - application/json
+      description: Update order information by order_number
+      parameters:
+      - description: Order Number
+        in: path
+        name: order_number
+        required: true
+        type: string
+      - description: Order information to update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Update order information
+      tags:
+      - orders
   /api/v1/users:
     get:
       consumes:
@@ -89,11 +281,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: List users
       tags:
       - users
@@ -107,22 +299,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/gin-app-start_internal_dto.CreateUserRequest'
+          $ref: '#/definitions/dto.CreateUserRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: Create a new user
       tags:
       - users
@@ -143,19 +335,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: Delete user
       tags:
       - users
@@ -175,19 +367,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: Get user by ID
       tags:
       - users
@@ -206,26 +398,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/gin-app-start_internal_dto.UpdateUserRequest'
+          $ref: '#/definitions/dto.UpdateUserRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: Update user information
       tags:
       - users
@@ -241,7 +433,7 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/gin-app-start_pkg_response.Response'
+            - $ref: '#/definitions/response.Response'
             - properties:
                 data:
                   properties:

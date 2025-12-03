@@ -13,6 +13,7 @@ import (
 func SetupRouter(
 	healthCtrl *controller.HealthController,
 	userCtrl *controller.UserController,
+	orderCtrl *controller.OrderController,
 	cfg *config.Config,
 ) *gin.Engine {
 	gin.SetMode(cfg.Server.Mode)
@@ -42,6 +43,15 @@ func SetupRouter(
 			users.PUT("/:id", userCtrl.UpdateUser)
 			users.DELETE("/:id", userCtrl.DeleteUser)
 			users.GET("", userCtrl.ListUsers)
+		}
+
+		orders := apiV1.Group("/orders")
+		{
+			orders.POST("", orderCtrl.CreateOrder)
+			orders.GET("/:order_number", orderCtrl.GetOrderByOrderNumber)
+			orders.PUT("/:order_number", orderCtrl.UpdateOrderByOrderNumber)
+			orders.DELETE("/:order_number", orderCtrl.DeleteOrderByOrderNumber)
+			orders.GET("", orderCtrl.ListOrders)
 		}
 	}
 

@@ -78,13 +78,13 @@ func main() {
 	logger.Info("Database connected successfully")
 
 	if cfg.Database.AutoMigrate {
-		if err := db.AutoMigrate(&model.User{}); err != nil {
+		if err := db.AutoMigrate(&model.User{}, &model.Order{}); err != nil {
 			logger.Fatal("Database migration failed", zap.Error(err))
 		}
 		logger.Info("Database migration completed")
 	}
 
-	_, err = database.NewRedisClient(&database.RedisConfig{
+	redisClient, err := database.NewRedisClient(&database.RedisConfig{
 		Addr:         cfg.Redis.Addr,
 		Password:     cfg.Redis.Password,
 		DB:           cfg.Redis.DB,
@@ -95,7 +95,7 @@ func main() {
 	if err != nil {
 		logger.Warn("Failed to initialize Redis", zap.Error(err))
 	} else {
-		defer database.CloseRedis()
+		defer redisClient.Close()
 		logger.Info("Redis connected successfully")
 	}
 
@@ -104,7 +104,12 @@ func main() {
 	userController := controller.NewUserController(userService)
 	healthController := controller.NewHealthController()
 
-	r := router.SetupRouter(healthController, userController, cfg)
+	redisRepo := repository.NewRedisRepository(redisClient, context.Background())
+	orderRepo := repository.NewOrderRepository(db)
+	orderService := service.NewOrderService(orderRepo, redisRepo)
+	orderController := controller.NewOrderController(orderService)
+
+	r := router.SetupRouter(healthController, userController, orderController, cfg)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),

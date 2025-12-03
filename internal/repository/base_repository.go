@@ -39,10 +39,15 @@ func (r *BaseRepository[T]) Delete(ctx context.Context, id uint) error {
 	// return r.db.WithContext(ctx).Unscoped().Delete(new(T), id).Error
 }
 
-func (r *BaseRepository[T]) List(ctx context.Context, offset, limit int) ([]*T, error) {
+func (r *BaseRepository[T]) List(ctx context.Context, offset, limit int) ([]*T, int64, error) {
 	var entities []*T
-	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&entities).Error
-	return entities, err
+	total, err := r.Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	err = r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&entities).Error
+	return entities, total, err
 }
 
 func (r *BaseRepository[T]) Count(ctx context.Context) (int64, error) {

@@ -37,12 +37,14 @@ func NewUserController(userService service.UserService) *UserController {
 func (ctrl *UserController) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("Parameter binding failed", zap.Error(err))
 		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
 		return
 	}
 
 	user, err := ctrl.userService.CreateUser(c.Request.Context(), &req)
 	if err != nil {
+		logger.Error("Create user failed", zap.Error(err))
 		handleServiceError(c, err)
 		return
 	}
@@ -67,12 +69,14 @@ func (ctrl *UserController) GetUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
+		logger.Error("Invalid user ID", zap.Error(err))
 		response.Error(c, 10001, "Invalid user ID")
 		return
 	}
 
 	user, err := ctrl.userService.GetUser(c.Request.Context(), uint(id))
 	if err != nil {
+		logger.Error("Get user failed", zap.Error(err))
 		handleServiceError(c, err)
 		return
 	}
@@ -98,18 +102,21 @@ func (ctrl *UserController) UpdateUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
+		logger.Error("Invalid user ID", zap.Error(err))
 		response.Error(c, 10001, "Invalid user ID")
 		return
 	}
 
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("Parameter binding failed", zap.Error(err))
 		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
 		return
 	}
 
 	user, err := ctrl.userService.UpdateUser(c.Request.Context(), uint(id), &req)
 	if err != nil {
+		logger.Error("Update user failed", zap.Error(err))
 		handleServiceError(c, err)
 		return
 	}
@@ -134,11 +141,13 @@ func (ctrl *UserController) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
+		logger.Error("Invalid user ID", zap.Error(err))
 		response.Error(c, 10001, "Invalid user ID")
 		return
 	}
 
 	if err := ctrl.userService.DeleteUser(c.Request.Context(), uint(id)); err != nil {
+		logger.Error("Delete user failed", zap.Error(err))
 		handleServiceError(c, err)
 		return
 	}
@@ -164,6 +173,7 @@ func (ctrl *UserController) ListUsers(c *gin.Context) {
 
 	users, total, err := ctrl.userService.ListUsers(c.Request.Context(), page, pageSize)
 	if err != nil {
+		logger.Error("List users failed", zap.Error(err))
 		handleServiceError(c, err)
 		return
 	}

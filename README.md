@@ -7,6 +7,9 @@ https://github.com/pengfeidai/gin-app-start
 2. 部分代码添加注释
 3. 添加config.local.yaml文件
 4. 修复air工具使用说明问题
+5. 修复docker-compose.yml，容器时间同步问题
+6. 添加order订单模块
+7. 添加redis业务逻辑
 
 
 
@@ -131,6 +134,7 @@ GET /health
 
 #### 创建用户
 
+**request：**
 ```bash
 POST /api/v1/users
 Content-Type: application/json
@@ -143,14 +147,68 @@ Content-Type: application/json
 }
 ```
 
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 2,
+        "created_at": "2025-12-03T11:55:06.317239131+08:00",
+        "update_at": "2025-12-03T11:55:06.317239221+08:00",
+        "username": "testuser16",
+        "email": "testuser16@example.com",
+        "phone": "13800138016",
+        "avatar": "",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10001,
+    "message": "Parameter binding failed: Key: 'CreateUserRequest.Username' Error:Field validation for 'Username' failed on the 'required' tag",
+    "data": null
+}
+```
+
 #### 获取用户
 
+**request：**
 ```bash
 GET /api/v1/users/:id
 ```
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 1,
+        "created_at": "2025-11-26T22:01:26.823447+08:00",
+        "update_at": "2025-11-26T22:01:26.823447+08:00",
+        "username": "testuser15",
+        "email": "testuser15@example.com",
+        "phone": "13800138015",
+        "avatar": "",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10002,
+    "message": "User not found",
+    "data": null
+}
+```
 
 #### 更新用户
-
+**request：**
 ```bash
 PUT /api/v1/users/:id
 Content-Type: application/json
@@ -161,58 +219,274 @@ Content-Type: application/json
 }
 ```
 
-#### 删除用户
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 1,
+        "created_at": "2025-11-26T22:01:26.823447+08:00",
+        "update_at": "2025-12-03T11:58:43.290084569+08:00",
+        "username": "testuser15",
+        "email": "newemail2@example.com",
+        "phone": "13900139020",
+        "avatar": "",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10002,
+    "message": "User not found",
+    "data": null
+}
+```
 
+#### 删除用户
+**request：**
 ```bash
 DELETE /api/v1/users/:id
 ```
 
-#### 用户列表
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "Deleted successfully",
+    "data": null
+}
+```
 
+#### 用户列表
+**request：**
 ```bash
 GET /api/v1/users?page=1&page_size=10
 ```
-
-## 响应格式
-
-### 成功响应
-
+**response：**
+- 成功响应：
 ```json
 {
-  "code": 0,
-  "message": "success",
-  "data": {
-    "id": 1,
-    "username": "testuser",
-    "email": "test@example.com"
-  }
+    "code": 0,
+    "message": "success",
+    "data": {
+        "list": [
+            {
+                "id": 1,
+                "created_at": "2025-11-26T22:01:26.823447+08:00",
+                "update_at": "2025-12-03T11:58:43.290084+08:00",
+                "username": "testuser15",
+                "email": "newemail2@example.com",
+                "phone": "13900139020",
+                "avatar": "",
+                "status": 1
+            }
+        ],
+        "total": 1,
+        "page": 1,
+        "page_size": 10
+    }
 }
 ```
 
-### 错误响应
+### 订单管理
 
+#### 创建订单
+**request：**
+```bash
+POST /api/v1/orders
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "total_price": 200.00,
+  "description": "Good product"
+}
+```
+**response：**
+- 成功响应：
 ```json
 {
-  "code": 10001,
-  "message": "参数错误",
-  "data": null
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 6,
+        "order_number": "EC20251203974341",
+        "created_at": "2025-12-03T12:03:58.328230483+08:00",
+        "update_at": "2025-12-03T12:03:58.328230563+08:00",
+        "user_id": 5,
+        "total_price": 50,
+        "description": "Bad!",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10001,
+    "message": "Parameter binding failed: invalid character ',' looking for beginning of value",
+    "data": null
+}
+```
+#### 获取订单
+**request：**
+```bash
+GET /api/v1/orders/:order_number
+```
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 2,
+        "order_number": "EC20251202659066",
+        "created_at": "2025-12-02T23:06:46.861499+08:00",
+        "update_at": "2025-12-02T23:06:46.861499+08:00",
+        "user_id": 2,
+        "total_price": 100.99,
+        "description": "want more!",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10029,
+    "message": "Set empty cache",
+    "data": null
 }
 ```
 
-### 分页响应
+#### 更新订单
+**request：**
+```bash
+PUT /api/v1/orders/:order_number
+Content-Type: application/json
 
-```json
 {
-  "code": 0,
-  "message": "success",
-  "data": {
-    "list": [...],
-    "total": 100,
-    "page": 1,
-    "page_size": 10
-  }
+  "description": "Order for John Doe",
+  "status": 1,
+  "total_price": 99.99
 }
 ```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 2,
+        "order_number": "EC20251202659066",
+        "created_at": "2025-12-02T23:06:46.861499+08:00",
+        "update_at": "2025-12-03T12:06:36.147182487+08:00",
+        "user_id": 2,
+        "total_price": 40,
+        "description": "Bad product!!!",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10023,
+    "message": "Order not found",
+    "data": null
+}
+```
+
+#### 删除订单
+**request：**
+```bash
+DELETE /api/v1/orders/:order_number
+```
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "Deleted successfully",
+    "data": null
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10023,
+    "message": "Order not found",
+    "data": null
+}
+```
+
+#### 订单列表
+**request：**
+```bash
+GET /api/v1/orders?page=1&page_size=10
+```
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "list": [
+            {
+                "id": 3,
+                "order_number": "EC20251202905265",
+                "created_at": "2025-12-02T23:52:01.054351+08:00",
+                "update_at": "2025-12-02T23:52:01.054351+08:00",
+                "user_id": 2,
+                "total_price": 100.99,
+                "description": "want more!",
+                "status": 1
+            },
+            {
+                "id": 4,
+                "order_number": "EC20251202658812",
+                "created_at": "2025-12-02T23:52:36.459454+08:00",
+                "update_at": "2025-12-02T23:52:36.459454+08:00",
+                "user_id": 3,
+                "total_price": 50,
+                "description": "Bad!",
+                "status": 1
+            },
+            {
+                "id": 5,
+                "order_number": "EC20251203141066",
+                "created_at": "2025-12-03T00:00:26.47771+08:00",
+                "update_at": "2025-12-03T00:00:26.477711+08:00",
+                "user_id": 4,
+                "total_price": 66,
+                "description": "Good!",
+                "status": 1
+            },
+            {
+                "id": 6,
+                "order_number": "EC20251203974341",
+                "created_at": "2025-12-03T12:03:58.32823+08:00",
+                "update_at": "2025-12-03T12:03:58.32823+08:00",
+                "user_id": 5,
+                "total_price": 50,
+                "description": "Bad!",
+                "status": 1
+            }
+        ],
+        "total": 4,
+        "page": 1,
+        "page_size": 10
+    }
+}
 
 ## 配置说明
 

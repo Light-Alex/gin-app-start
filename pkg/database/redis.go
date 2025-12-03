@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"gin-app-start/pkg/logger"
+
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisConfig struct {
-	Addr         string
-	Password     string
-	DB           int
-	PoolSize     int
-	MinIdleConns int
-	MaxRetries   int
+	Addr         string // Redis地址，格式为"host:port"
+	Password     string // Redis密码
+	DB           int    // Redis数据库索引
+	PoolSize     int    // 连接池大小
+	MinIdleConns int    // 最小空闲连接数
+	MaxRetries   int    // 最大重试次数
 }
-
-var RedisClient *redis.Client
 
 func NewRedisClient(config *RedisConfig) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
@@ -32,24 +32,16 @@ func NewRedisClient(config *RedisConfig) (*redis.Client, error) {
 		WriteTimeout: 3 * time.Second,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis: %w", err)
+	// 需5s内连接成功，否则报错
+	_, err := client.Ping(timeoutCtx).Result()
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to redis: %w", err)
 	}
 
-	RedisClient = client
+	logger.Info("connected to redis successfully")
+
 	return client, nil
-}
-
-func CloseRedis() error {
-	if RedisClient != nil {
-		return RedisClient.Close()
-	}
-	return nil
-}
-
-func GetRedisClient() *redis.Client {
-	return RedisClient
 }

@@ -17,7 +17,7 @@
 
 ## 项目概述
 
-Gin App Start 是一个基于 Go 1.24 和 Gin 框架构建的现代化 Web 应用脚手架。项目采用清晰的分层架构设计，遵循 Go 语言最佳实践，支持 PostgreSQL 和 Redis，适合快速开发企业级 Web 应用。
+Gin App Start 是一个基于 Go 1.24 和 Gin 框架构建的现代化 Web 应用脚手架。项目采用清晰的分层架构设计，遵循 Go 语言最佳实践，支持 PostgreSQL、Redis、Kafka，适合快速开发企业级 Web 应用。
 
 ### 核心特性
 
@@ -46,6 +46,7 @@ Gin App Start 是一个基于 Go 1.24 和 Gin 框架构建的现代化 Web 应�
 | GORM | v1.25.12 | ORM 框架 |
 | PostgreSQL | 17+ | 关系型数据库 |
 | Redis | 7+ | 缓存数据库 |
+| Kafka | 4.0+ | 消息队列 |
 
 ### 主要依赖
 
@@ -152,6 +153,7 @@ gin-app-start/
 - Go 1.24 或更高版本
 - PostgreSQL 12+ （推荐 17）
 - Redis 6.0+ （推荐 7）
+- Kafka 4.0+ （推荐 4.0）
 - Docker 和 Docker Compose（可选）
 
 ### 方式一：使用 Docker Compose（推荐）
@@ -163,7 +165,7 @@ gin-app-start/
 git clone <your-repo-url>
 cd gin-app-start
 
-# 2. 启动所有服务（PostgreSQL + Redis + App）
+# 2. 启动所有服务（PostgreSQL + Redis + Kafka + App）
 docker-compose up -d
 
 # 3. 查看日志
@@ -206,6 +208,23 @@ docker run -d \
   --name gin-app-redis \
   -p 6379:6379 \
   redis:7-alpine
+
+# 启动 Kafka
+docker run -d \
+  --name gin-app-kafka \
+  -p 9092:9092 \  # 客户端连接端口
+  -p 9093:9093 \  # Controller 内部通信端口
+  -v kafka-data:/bitnami/kafka/data \ # Volume 挂载，对应宿主机目录：/var/lib/docker/volumes/kafka-data
+  -e KAFKA_CFG_NODE_ID=1 \  # 节点唯一标识
+  -e KAFKA_CFG_PROCESS_ROLES=controller,broker \  # 同时担任控制器和代理的角色
+  -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \       # 配置 KRaft 控制器仲裁组（Quorum）的投票成员（现在只有一个仲裁成员为节点1）
+  -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \  # 定义两个监听器 
+  -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \ # 告知客户端如何连接到 Kafka
+  -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \  # 定义控制器监听器的名称
+  -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \  # 定义代理监听器的名称
+  -e KAFKA_CFG_LOG_DIRS=/bitnami/kafka/data \  # 指定日志路径
+  -e ALLOW_PLAINTEXT_LISTENER=yes \
+  bitnami/kafka:latest
 ```
 
 **或者使用本地安装的数据库**，确保服务已启动。

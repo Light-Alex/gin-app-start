@@ -15,4 +15,3 @@ type UpdateUserRequest struct {
 	Avatar string `json:"avatar" binding:"omitempty,url" example:"https://example.com/avatar.jpg"`
 	Status int8   `json:"status" binding:"omitempty,oneof=0 1" example:"1"`
 }
-
