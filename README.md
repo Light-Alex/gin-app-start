@@ -10,6 +10,8 @@ https://github.com/pengfeidai/gin-app-start
 5. 修复docker-compose.yml，容器时间同步问题
 6. 添加order订单模块
 7. 添加redis业务逻辑
+8. 新增sesson认证机制
+9. 新增角色：admin、普通用户
 
 
 
