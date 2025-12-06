@@ -23,9 +23,9 @@ var _ OrderService = (*orderService)(nil)
 type OrderService interface {
 	CreateOrder(ctx context.Context, req *dto.CreateOrderRequest) (*model.Order, error)
 	GetOrderByOrderNumber(ctx context.Context, orderNumber string) (*model.Order, error)
-	UpdateOrderByOrderNumber(ctx context.Context, orderNumber string, req *dto.UpdateOrderRequest) (*model.Order, error)
+	UpdateOrderByOrderNumber(ctx context.Context, req *dto.UpdateOrderRequest) (*model.Order, error)
 	DeleteOrderByOrderNumber(ctx context.Context, orderNumber string) error
-	ListOrders(ctx context.Context, page, pageSize int) ([]*model.Order, int64, error)
+	ListOrders(ctx context.Context, username string, page, pageSize int) ([]*model.Order, int64, error)
 
 	GetOrderByID(ctx context.Context, id uint) (*model.Order, error)
 	UpdateOrder(ctx context.Context, id uint, req *dto.UpdateOrderRequest) (*model.Order, error)
@@ -48,8 +48,8 @@ func (s *orderService) getOrderCacheKey(orderNumber string) string {
 	return fmt.Sprintf("order:%s", orderNumber)
 }
 
-func (s *orderService) getOrderListCacheKey(page, pageSize int) string {
-	return fmt.Sprintf("order_list:%d:%d", page, pageSize)
+func (s *orderService) getOrderListCacheKey(username string, page, pageSize int) string {
+	return fmt.Sprintf("order_list:%s:%d:%d", username, page, pageSize)
 }
 
 func (s *orderService) saveOrderInCache(order *model.Order, expireTime time.Duration) error {
@@ -70,8 +70,8 @@ func (s *orderService) saveOrderInCache(order *model.Order, expireTime time.Dura
 }
 
 // 保存订单列表到Redis缓存, 设置过期时间为expireTime
-func (s *orderService) saveOrderListInCache(orders []*model.Order, total int64, page, pageSize int, expireTime time.Duration) error {
-	cacheKey := s.getOrderListCacheKey(page, pageSize)
+func (s *orderService) saveOrderListInCache(orders []*model.Order, total int64, username string, page, pageSize int, expireTime time.Duration) error {
+	cacheKey := s.getOrderListCacheKey(username, page, pageSize)
 
 	data, err := json.MarshalIndent(orders, "", "  ")
 	if err != nil {
@@ -125,7 +125,8 @@ func (s *orderService) CreateOrder(ctx context.Context, req *dto.CreateOrderRequ
 
 	order = &model.Order{
 		OrderNumber: orderNumber,
-		UserID:      req.UserID,
+		Username:    req.Username,
+		UserID:      req.UserId,
 		TotalPrice:  req.TotalPrice,
 		Description: req.Description,
 		Status:      1,
@@ -196,7 +197,8 @@ func (s *orderService) GetOrderByOrderNumber(ctx context.Context, orderNumber st
 	return order, nil
 }
 
-func (s *orderService) UpdateOrderByOrderNumber(ctx context.Context, orderNumber string, req *dto.UpdateOrderRequest) (*model.Order, error) {
+func (s *orderService) UpdateOrderByOrderNumber(ctx context.Context, req *dto.UpdateOrderRequest) (*model.Order, error) {
+	orderNumber := req.OrderNumber
 	order, err := s.GetOrderByOrderNumber(ctx, orderNumber)
 	if err != nil || order == nil {
 		logger.Error("Order not found", zap.String("order_number", orderNumber))
@@ -316,9 +318,9 @@ func (s *orderService) DeleteOrder(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (s *orderService) ListOrders(ctx context.Context, page, pageSize int) ([]*model.Order, int64, error) {
+func (s *orderService) ListOrders(ctx context.Context, username string, page, pageSize int) ([]*model.Order, int64, error) {
 	// 从Redis缓存中获取订单列表
-	cacheKey := s.getOrderListCacheKey(page, pageSize)
+	cacheKey := s.getOrderListCacheKey(username, page, pageSize)
 	cachedOrders, _ := s.redisCache.HashGet(cacheKey, "orders")
 	cachedTotal, _ := s.redisCache.HashGet(cacheKey, "total")
 	if cachedOrders != "" && cachedTotal != "" {
@@ -350,14 +352,14 @@ func (s *orderService) ListOrders(ctx context.Context, page, pageSize int) ([]*m
 	}
 
 	offset := (page - 1) * pageSize
-	orders, total, err := s.orderRepo.List(ctx, offset, pageSize)
+	orders, total, err := s.orderRepo.List(ctx, username, offset, pageSize)
 	if err != nil {
 		logger.Error("Failed to list orders", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
 		return nil, 0, errors.ErrOrderListFailed
 	}
 
 	// 保存订单列表到Redis缓存, 设置过期时间为5min
-	if err := s.saveOrderListInCache(orders, total, page, pageSize, 30*time.Minute); err != nil {
+	if err := s.saveOrderListInCache(orders, total, username, page, pageSize, 30*time.Minute); err != nil {
 		logger.Error("Failed to save order list cache", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
 		return nil, 0, errors.ErrOrderCacheFailed
 	}

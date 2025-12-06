@@ -16,7 +16,10 @@ import (
 )
 
 type UserService interface {
+	Login(ctx context.Context, req *dto.LoginRequest) (*model.User, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*model.User, error)
+	UpdatePassword(ctx context.Context, req *dto.UpdatePasswordRequest) error
+	UploadImage(ctx context.Context, username, filename string) error
 	GetUser(ctx context.Context, id uint) (*model.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
 	UpdateUser(ctx context.Context, id uint, req *dto.UpdateUserRequest) (*model.User, error)
@@ -79,6 +82,82 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	)
 
 	return user, nil
+}
+
+func (s *userService) Login(ctx context.Context, req *dto.LoginRequest) (*model.User, error) {
+	logger.Info("service login phone: %s, password: %s", zap.String("username", req.Username), zap.String("password", req.Password))
+
+	user, err := s.userRepo.GetByUsername(ctx, req.Username)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.ErrUserNotFound
+		}
+		logger.Error("Failed to get user", zap.Error(err), zap.String("username", req.Username))
+		return nil, errors.WrapBusinessError(10014, "Failed to get user", err)
+	}
+
+	if !VerifyPassword(req.Password, user.Salt, user.Password) {
+		logger.Error("Password verification failed", zap.String("username", req.Username))
+		return nil, errors.ErrLoginFailed
+	}
+
+	return user, nil
+}
+
+func (s *userService) UpdatePassword(ctx context.Context, req *dto.UpdatePasswordRequest) error {
+	logger.Info("service UpdatePassword: %s %s %s", zap.String("username", req.Username), zap.String("old_password", req.OldPassword), zap.String("new_password", req.NewPassword))
+
+	logger.Info("start to update password for username: %s", zap.String("username", req.Username))
+	user, err := s.GetUserByUsername(ctx, req.Username)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrUserNotFound
+		}
+		logger.Error("Failed to get user", zap.Error(err), zap.String("username", req.Username))
+		return errors.WrapBusinessError(10014, "Failed to get user", err)
+	}
+
+	// 验证旧密码是否匹配
+	if !VerifyPassword(req.OldPassword, user.Salt, user.Password) {
+		logger.Error("Old password verification failed", zap.String("username", req.Username))
+		return errors.ErrPasswordError
+	}
+
+	// 生成新的盐值和哈希密码
+	newSalt := generateSalt()
+	newHashedPassword := hashPassword(req.NewPassword, newSalt)
+
+	// 更新用户密码和盐值
+	user.Salt = newSalt
+	user.Password = newHashedPassword
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		logger.Error("Failed to update password", zap.Error(err), zap.String("username", req.Username))
+		return errors.WrapBusinessError(10017, "Failed to update user", err)
+	}
+
+	logger.Info("Password updated successfully for", zap.String("username", req.Username))
+	return nil
+}
+
+func (s *userService) UploadImage(ctx context.Context, username, filename string) error {
+	user, err := s.GetUserByUsername(ctx, username)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.ErrUserNotFound
+		}
+		logger.Error("Failed to get user", zap.Error(err), zap.String("username", username))
+		return errors.WrapBusinessError(10014, "Failed to get user", err)
+	}
+
+	user.Avatar = filename
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		logger.Error("Failed to update user", zap.Error(err), zap.String("username", username))
+		return errors.WrapBusinessError(10017, "Failed to update user", err)
+	}
+
+	logger.Info("Avatar updated successfully for", zap.String("username", username))
+	return nil
 }
 
 func (s *userService) GetUser(ctx context.Context, id uint) (*model.User, error) {

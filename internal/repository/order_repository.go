@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"gin-app-start/internal/common"
 	"gin-app-start/internal/model"
 
 	"gorm.io/gorm"
@@ -14,7 +15,7 @@ type OrderRepository interface {
 	DeleteOrderByOrderNumber(ctx context.Context, orderNumber string) error
 	Update(ctx context.Context, user *model.Order) error
 	Delete(ctx context.Context, id uint) error
-	List(ctx context.Context, offset, limit int) ([]*model.Order, int64, error)
+	List(ctx context.Context, username string, offset, limit int) ([]*model.Order, int64, error)
 	Count(ctx context.Context) (int64, error)
 }
 
@@ -39,4 +40,16 @@ func (r *orderRepository) GetOrderByOrderNumber(ctx context.Context, orderNumber
 
 func (r *orderRepository) DeleteOrderByOrderNumber(ctx context.Context, orderNumber string) error {
 	return r.db.WithContext(ctx).Where("order_number = ?", orderNumber).Delete(&model.Order{}).Error
+}
+
+func (r *orderRepository) List(ctx context.Context, username string, offset, limit int) ([]*model.Order, int64, error) {
+	var orders []*model.Order
+	var err error
+	if username == common.ADMIN_NAME {
+		err = r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&orders).Error
+	} else {
+		err = r.db.WithContext(ctx).Offset(offset).Limit(limit).Where("username = ?", username).Find(&orders).Error
+	}
+	total := int64(len(orders))
+	return orders, total, err
 }

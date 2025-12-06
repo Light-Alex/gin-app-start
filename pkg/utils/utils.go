@@ -2,7 +2,11 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
+	"mime/multipart"
+	"os"
+	"path"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,4 +52,35 @@ func GenerateOrderNumberWithPrefix(prefix string) string {
 	randomPart := fmt.Sprintf("%06d", rand.Intn(1000000))
 
 	return fmt.Sprintf("%s%s%s", prefix, datePart, randomPart)
+}
+
+func SaveToFile(file *multipart.FileHeader, dst string) (string, error) {
+	// 获取后缀名
+	ext := path.Ext(file.Filename)
+	fileName := GenerateUUID() + ext
+	src, err := file.Open()
+	if err != nil {
+		return fileName, err
+	}
+	defer src.Close()
+
+	// 判断dst目录是否存在, 如果目录不存在，创建目录
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		err := os.MkdirAll(dst, 0755)
+		if err != nil {
+			return fileName, err
+		}
+	}
+
+	// 创建 dst 文件
+	out, err := os.Create(path.Join(dst, fileName))
+	if err != nil {
+		return fileName, err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, src)
+	if err != nil {
+		return fileName, err
+	}
+	return fileName, nil
 }

@@ -12,6 +12,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Log      LogConfig      `mapstructure:"log"`
+	File     FileConfig     `mapstructure:"file"`
 	Session  SessionConfig  `mapstructure:"session"`
 }
 
@@ -53,7 +54,16 @@ type LogConfig struct {
 	MaxAge   int    `mapstructure:"max_age"`
 }
 
+type FileConfig struct {
+	DirName   string `mapstructure:"dir_name"`
+	UrlPrefix string `mapstructure:"url_prefix"`
+	MaxSize   int64  `mapstructure:"max_size"`
+}
+
 type SessionConfig struct {
+	UseRedis bool   `mapstructure:"use_redis"`
+	Name     string `mapstructure:"name"`
+	Size     int    `mapstructure:"size"`
 	Key      string `mapstructure:"key"`
 	MaxAge   int    `mapstructure:"max_age"`
 	Path     string `mapstructure:"path"`

@@ -14,7 +14,8 @@ type Order struct {
 	UpdateAt    time.Time      `json:"update_at" example:"2023-01-01T00:00:00Z"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-" swaggerignore:"true"`
 	UserID      uint           `gorm:"index;not null" json:"user_id" example:"1"`
-	TotalPrice  float64        ` gorm:"type:decimal(10,2);not null" json:"total_price" example:"100.00"`
+	Username    string         `gorm:"size:64;;not null" json:"username" binding:"required" example:"john_doe"`
+	TotalPrice  float64        `gorm:"type:decimal(10,2);not null" json:"total_price" example:"100.00"`
 	Description string         `gorm:"size:256" json:"description" example:"Order for product A"`
 	Status      int8           `gorm:"default:1;not null" json:"status" example:"1"`
 }

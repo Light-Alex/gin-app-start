@@ -32,7 +32,15 @@ log:
   max_size: 100
   max_age: 7
 
+file:
+  dirName: 'public/file/'
+  urlPrefix: 'http://127.0.0.1:9060/api/v1/gin-app-start/file/'
+  max_size: 8 << 20 # 最大文件上传大小为8M
+
 session:
+  use_redis: true
+  name: 'mysession'
+  size: 10
   key: gin-session
   max_age: 604800
   path: /

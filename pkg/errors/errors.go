@@ -51,5 +51,7 @@ var (
 	ErrOrderCacheUnmarshalFailed  = NewBusinessError(10032, "Failed to unmarshal orders from cache")
 	ErrRedisScanKeysFailed        = NewBusinessError(10033, "Failed to scan keys")
 	ErrOrderListCacheDeleteFailed = NewBusinessError(10034, "Failed to delete order list cache")
+	ErrLoginFailed                = NewBusinessError(10035, "Login failed")
+	ErrPasswordError              = NewBusinessError(10036, "password error")
 	ErrInternalError              = NewBusinessError(50000, "Internal server error")
 )

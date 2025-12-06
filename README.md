@@ -208,6 +208,76 @@ GET /api/v1/users/:id
 }
 ```
 
+#### 用户登录
+**request：**
+```bash
+POST /api/v1/users/login
+Content-Type: application/json
+
+{
+  "username": "testuser15",
+  "password": "password123"
+}
+```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "avatar": "http://127.0.0.1:9060/api/v1/gin-app-start/file/",
+        "email": "admin6@example.com",
+        "phone": "13800138022",
+        "userId": 3,
+        "username": "admin"
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10035,
+    "message": "Login failed: code: 10035, message: Login failed",
+    "data": null
+}
+```
+
+#### 查询用户
+**request：**
+```bash
+GET /api/v1/users/:id
+```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "id": 3,
+        "created_at": "2025-12-05T16:13:49.914463+08:00",
+        "update_at": "2025-12-05T16:13:49.914463+08:00",
+        "username": "admin",
+        "email": "admin6@example.com",
+        "phone": "13800138022",
+        "avatar": "",
+        "status": 1
+    }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
+    "data": null
+}
+```
+
+
 #### 更新用户
 **request：**
 ```bash
@@ -227,17 +297,80 @@ Content-Type: application/json
     "code": 0,
     "message": "success",
     "data": {
-        "id": 1,
-        "created_at": "2025-11-26T22:01:26.823447+08:00",
-        "update_at": "2025-12-03T11:58:43.290084569+08:00",
-        "username": "testuser15",
-        "email": "newemail2@example.com",
-        "phone": "13900139020",
+        "id": 4,
+        "created_at": "2025-12-05T16:53:10.935254+08:00",
+        "update_at": "2025-12-05T17:08:28.409947122+08:00",
+        "username": "user2",
+        "email": "user4@example.com",
+        "phone": "13900139024",
         "avatar": "",
         "status": 1
     }
 }
 ```
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
+    "data": null
+}
+```
+
+#### 更改密码
+**request：**
+```bash
+POST /api/v1/users/change_pwd
+Content-Type: application/json
+
+{
+  "username": "user2",
+  "old_password": "password123",
+  "new_password": "newpassword123"
+}
+```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": null
+}
+```
+
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
+    "data": null
+}
+```
+
+#### 上传头像
+**request：**
+```bash
+POST /api/v1/users/upload_avatar
+Content-Type: multipart/form-data
+
+{
+  "username": "user2",
+  "file": (binary file)
+}
+```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": "http://127.0.0.1:9060/api/v1/gin-app-start/file/f389f6b0-cffa-4ad8-b7ab-64ab8d20f498.png"
+}
+```
+
 - 错误响应：
 ```json
 {
@@ -247,11 +380,27 @@ Content-Type: application/json
 }
 ```
 
-#### 删除用户
-**request：**
+#### 获取头像
 ```bash
-DELETE /api/v1/users/:id
+GET /api/v1/users/:id/avatar
 ```
+
+**response：**
+- 成功响应：
+```json
+展示用户头像
+```
+
+- 错误响应：
+```json
+{
+    "code": 10003,
+    "message": "Unauthorized access",
+    "data": null
+}
+```
+
+#### 删除用户
 
 **response：**
 - 成功响应：
@@ -259,6 +408,14 @@ DELETE /api/v1/users/:id
 {
     "code": 0,
     "message": "Deleted successfully",
+    "data": null
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
     "data": null
 }
 ```
@@ -285,12 +442,69 @@ GET /api/v1/users?page=1&page_size=10
                 "phone": "13900139020",
                 "avatar": "",
                 "status": 1
+            },
+            {
+                "id": 3,
+                "created_at": "2025-12-05T16:13:49.914463+08:00",
+                "update_at": "2025-12-05T16:13:49.914463+08:00",
+                "username": "admin",
+                "email": "admin6@example.com",
+                "phone": "13800138022",
+                "avatar": "",
+                "status": 1
+            },
+            {
+                "id": 4,
+                "created_at": "2025-12-05T16:53:10.935254+08:00",
+                "update_at": "2025-12-05T17:13:47.639198+08:00",
+                "username": "user2",
+                "email": "user4@example.com",
+                "phone": "13900139024",
+                "avatar": "",
+                "status": 1
             }
         ],
-        "total": 1,
+        "total": 3,
         "page": 1,
         "page_size": 10
     }
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10003,
+    "message": "Unauthorized access",
+    "data": null
+}
+```
+
+#### 退出登录
+**request：**
+```bash
+POST /api/v1/users/logout
+Content-Type: application/json
+
+{
+  "username": "Bob"
+}
+```
+
+**response：**
+- 成功响应：
+```json
+{
+    "code": 0,
+    "message": "Logout successfully",
+    "data": null
+}
+```
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
+    "data": null
 }
 ```
 
@@ -303,7 +517,7 @@ POST /api/v1/orders
 Content-Type: application/json
 
 {
-  "user_id": 1,
+  "username": "Bob",
   "total_price": 200.00,
   "description": "Good product"
 }
@@ -315,13 +529,14 @@ Content-Type: application/json
     "code": 0,
     "message": "success",
     "data": {
-        "id": 6,
-        "order_number": "EC20251203974341",
-        "created_at": "2025-12-03T12:03:58.328230483+08:00",
-        "update_at": "2025-12-03T12:03:58.328230563+08:00",
-        "user_id": 5,
-        "total_price": 50,
-        "description": "Bad!",
+        "id": 1,
+        "order_number": "EC20251206344246",
+        "created_at": "2025-12-06T15:40:04.018367555+08:00",
+        "update_at": "2025-12-06T15:40:04.018367625+08:00",
+        "user_id": 7,
+        "username": "Bob",
+        "total_price": 62,
+        "description": "Good!",
         "status": 1
     }
 }
@@ -329,15 +544,16 @@ Content-Type: application/json
 - 错误响应：
 ```json
 {
-    "code": 10001,
-    "message": "Parameter binding failed: invalid character ',' looking for beginning of value",
+    "code": 10003,
+    "message": "Unauthorized access",
     "data": null
 }
 ```
+
 #### 获取订单
 **request：**
 ```bash
-GET /api/v1/orders/:order_number
+GET /api/v1/orders/search?order_number=EC20251202659066&username=Bob
 ```
 **response：**
 - 成功响应：
@@ -346,13 +562,14 @@ GET /api/v1/orders/:order_number
     "code": 0,
     "message": "success",
     "data": {
-        "id": 2,
-        "order_number": "EC20251202659066",
-        "created_at": "2025-12-02T23:06:46.861499+08:00",
-        "update_at": "2025-12-02T23:06:46.861499+08:00",
-        "user_id": 2,
-        "total_price": 100.99,
-        "description": "want more!",
+        "id": 1,
+        "order_number": "EC20251206344246",
+        "created_at": "2025-12-06T15:40:04.018367555+08:00",
+        "update_at": "2025-12-06T15:40:04.018367625+08:00",
+        "user_id": 7,
+        "username": "Bob",
+        "total_price": 62,
+        "description": "Good!",
         "status": 1
     }
 }
@@ -386,11 +603,12 @@ Content-Type: application/json
     "code": 0,
     "message": "success",
     "data": {
-        "id": 2,
-        "order_number": "EC20251202659066",
-        "created_at": "2025-12-02T23:06:46.861499+08:00",
-        "update_at": "2025-12-03T12:06:36.147182487+08:00",
-        "user_id": 2,
+        "id": 1,
+        "order_number": "EC20251206344246",
+        "created_at": "2025-12-06T15:40:04.018367555+08:00",
+        "update_at": "2025-12-06T15:44:10.473489694+08:00",
+        "user_id": 7,
+        "username": "Bob",
         "total_price": 40,
         "description": "Bad product!!!",
         "status": 1
@@ -409,7 +627,13 @@ Content-Type: application/json
 #### 删除订单
 **request：**
 ```bash
-DELETE /api/v1/orders/:order_number
+DELETE /api/v1/orders
+Content-Type: application/json
+
+{
+  "order_number": "EC20251206344246"
+  "username": "Bob"
+}
 ```
 **response：**
 - 成功响应：
@@ -432,7 +656,7 @@ DELETE /api/v1/orders/:order_number
 #### 订单列表
 **request：**
 ```bash
-GET /api/v1/orders?page=1&page_size=10
+GET /api/v1/orders?username=Bob
 ```
 **response：**
 - 成功响应：
@@ -443,52 +667,54 @@ GET /api/v1/orders?page=1&page_size=10
     "data": {
         "list": [
             {
+                "id": 1,
+                "order_number": "EC20251206344246",
+                "created_at": "2025-12-06T15:40:04.018367+08:00",
+                "update_at": "2025-12-06T15:44:10.473489+08:00",
+                "user_id": 7,
+                "username": "Bob",
+                "total_price": 40,
+                "description": "Bad product!!!",
+                "status": 1
+            },
+            {
                 "id": 3,
-                "order_number": "EC20251202905265",
-                "created_at": "2025-12-02T23:52:01.054351+08:00",
-                "update_at": "2025-12-02T23:52:01.054351+08:00",
-                "user_id": 2,
-                "total_price": 100.99,
-                "description": "want more!",
+                "order_number": "EC20251206794733",
+                "created_at": "2025-12-06T15:45:08.447049+08:00",
+                "update_at": "2025-12-06T15:45:08.447049+08:00",
+                "user_id": 7,
+                "username": "Bob",
+                "total_price": 65,
+                "description": "Good",
                 "status": 1
             },
             {
                 "id": 4,
-                "order_number": "EC20251202658812",
-                "created_at": "2025-12-02T23:52:36.459454+08:00",
-                "update_at": "2025-12-02T23:52:36.459454+08:00",
-                "user_id": 3,
-                "total_price": 50,
-                "description": "Bad!",
-                "status": 1
-            },
-            {
-                "id": 5,
-                "order_number": "EC20251203141066",
-                "created_at": "2025-12-03T00:00:26.47771+08:00",
-                "update_at": "2025-12-03T00:00:26.477711+08:00",
-                "user_id": 4,
-                "total_price": 66,
-                "description": "Good!",
-                "status": 1
-            },
-            {
-                "id": 6,
-                "order_number": "EC20251203974341",
-                "created_at": "2025-12-03T12:03:58.32823+08:00",
-                "update_at": "2025-12-03T12:03:58.32823+08:00",
-                "user_id": 5,
-                "total_price": 50,
-                "description": "Bad!",
+                "order_number": "EC20251206169258",
+                "created_at": "2025-12-06T15:45:17.993545+08:00",
+                "update_at": "2025-12-06T15:45:17.993545+08:00",
+                "user_id": 7,
+                "username": "Bob",
+                "total_price": 99,
+                "description": "Very Good!!!",
                 "status": 1
             }
         ],
-        "total": 4,
+        "total": 3,
         "page": 1,
         "page_size": 10
     }
 }
 ```
+- 错误响应：
+```json
+{
+    "code": 10036,
+    "message": "overstepping authority",
+    "data": null
+}
+```
+
 
 ## 配置说明
 
