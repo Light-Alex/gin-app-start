@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"gin-app-start/pkg/response"
+	"gin-app-start/internal/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,9 +21,11 @@ func NewHealthController() *HealthController {
 //	@Produce		json
 //	@Success		200	{object}	response.Response{data=object{status=string,message=string}}
 //	@Router			/health [get]
-func (ctrl *HealthController) HealthCheck(c *gin.Context) {
-	response.Success(c, gin.H{
-		"status": "ok",
-		"message": "service is running",
-	})
+func (ctrl *HealthController) HealthCheck() common.HandlerFunc {
+	return func(c common.Context) {
+		c.Payload(gin.H{
+			"status":  "ok",
+			"message": "service is running",
+		})
+	}
 }

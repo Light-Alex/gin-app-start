@@ -64,4 +64,3 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 		Data:    data,
 	})
 }
-

@@ -1,30 +1,28 @@
 package service
 
 import (
-	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
+	"gin-app-start/internal/common"
 	"gin-app-start/internal/dto"
 	"gin-app-start/internal/model"
 	"gin-app-start/internal/repository"
 	"gin-app-start/pkg/errors"
-	"gin-app-start/pkg/logger"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type UserService interface {
-	Login(ctx context.Context, req *dto.LoginRequest) (*model.User, error)
-	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*model.User, error)
-	UpdatePassword(ctx context.Context, req *dto.UpdatePasswordRequest) error
-	UploadImage(ctx context.Context, username, filename string) error
-	GetUser(ctx context.Context, id uint) (*model.User, error)
-	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
-	UpdateUser(ctx context.Context, id uint, req *dto.UpdateUserRequest) (*model.User, error)
-	DeleteUser(ctx context.Context, id uint) error
-	ListUsers(ctx context.Context, page, pageSize int) ([]*model.User, int64, error)
+	Login(ctx common.Context, req *dto.LoginRequest) (*model.User, error)
+	CreateUser(ctx common.Context, req *dto.CreateUserRequest) (*model.User, error)
+	UpdatePassword(ctx common.Context, req *dto.UpdatePasswordRequest) error
+	UploadImage(ctx common.Context, username, filename string) error
+	GetUser(ctx common.Context, id uint) (*model.User, error)
+	GetUserByUsername(ctx common.Context, username string) (*model.User, error)
+	UpdateUser(ctx common.Context, id uint, req *dto.UpdateUserRequest) (*model.User, error)
+	DeleteUser(ctx common.Context, id uint) error
+	ListUsers(ctx common.Context, page, pageSize int) ([]*model.User, int64, error)
 }
 
 type userService struct {
@@ -37,25 +35,23 @@ func NewUserService(userRepo repository.UserRepository) UserService {
 	}
 }
 
-func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*model.User, error) {
+func (s *userService) CreateUser(ctx common.Context, req *dto.CreateUserRequest) (*model.User, error) {
 	existingUser, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		logger.Error("Failed to query user", zap.Error(err), zap.String("username", req.Username))
-		return nil, errors.WrapBusinessError(10010, "Failed to query user", err)
+		return nil, err
 	}
 
 	if existingUser != nil {
-		return nil, errors.ErrUserExists
+		return nil, errors.New("User already exists")
 	}
 
 	if req.Email != "" {
 		existingUser, err = s.userRepo.GetByEmail(ctx, req.Email)
 		if err != nil && err != gorm.ErrRecordNotFound {
-			logger.Error("Failed to query email", zap.Error(err), zap.String("email", req.Email))
-			return nil, errors.WrapBusinessError(10011, "Failed to query email", err)
+			return nil, err
 		}
 		if existingUser != nil {
-			return nil, errors.NewBusinessError(10012, "Email already exists")
+			return nil, errors.New("Email already exists")
 		}
 	}
 
@@ -72,55 +68,40 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
-		logger.Error("Failed to create user", zap.Error(err), zap.String("username", req.Username))
-		return nil, errors.WrapBusinessError(10013, "Failed to create user", err)
+		return nil, err
 	}
-
-	logger.Info("User created successfully",
-		zap.String("username", user.Username),
-		zap.Uint("user_id", user.ID),
-	)
 
 	return user, nil
 }
 
-func (s *userService) Login(ctx context.Context, req *dto.LoginRequest) (*model.User, error) {
-	logger.Info("service login phone: %s, password: %s", zap.String("username", req.Username), zap.String("password", req.Password))
-
+func (s *userService) Login(ctx common.Context, req *dto.LoginRequest) (*model.User, error) {
 	user, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.ErrUserNotFound
+			return nil, err
 		}
-		logger.Error("Failed to get user", zap.Error(err), zap.String("username", req.Username))
-		return nil, errors.WrapBusinessError(10014, "Failed to get user", err)
+		return nil, err
 	}
 
 	if !VerifyPassword(req.Password, user.Salt, user.Password) {
-		logger.Error("Password verification failed", zap.String("username", req.Username))
-		return nil, errors.ErrLoginFailed
+		return nil, errors.New("Password not match")
 	}
 
 	return user, nil
 }
 
-func (s *userService) UpdatePassword(ctx context.Context, req *dto.UpdatePasswordRequest) error {
-	logger.Info("service UpdatePassword: %s %s %s", zap.String("username", req.Username), zap.String("old_password", req.OldPassword), zap.String("new_password", req.NewPassword))
-
-	logger.Info("start to update password for username: %s", zap.String("username", req.Username))
+func (s *userService) UpdatePassword(ctx common.Context, req *dto.UpdatePasswordRequest) error {
 	user, err := s.GetUserByUsername(ctx, req.Username)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.ErrUserNotFound
+			return err
 		}
-		logger.Error("Failed to get user", zap.Error(err), zap.String("username", req.Username))
-		return errors.WrapBusinessError(10014, "Failed to get user", err)
+		return err
 	}
 
 	// 验证旧密码是否匹配
 	if !VerifyPassword(req.OldPassword, user.Salt, user.Password) {
-		logger.Error("Old password verification failed", zap.String("username", req.Username))
-		return errors.ErrPasswordError
+		return errors.New("Old password error")
 	}
 
 	// 生成新的盐值和哈希密码
@@ -132,65 +113,58 @@ func (s *userService) UpdatePassword(ctx context.Context, req *dto.UpdatePasswor
 	user.Password = newHashedPassword
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		logger.Error("Failed to update password", zap.Error(err), zap.String("username", req.Username))
-		return errors.WrapBusinessError(10017, "Failed to update user", err)
+		return err
 	}
 
-	logger.Info("Password updated successfully for", zap.String("username", req.Username))
 	return nil
 }
 
-func (s *userService) UploadImage(ctx context.Context, username, filename string) error {
+func (s *userService) UploadImage(ctx common.Context, username, filename string) error {
 	user, err := s.GetUserByUsername(ctx, username)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.ErrUserNotFound
+			return err
 		}
-		logger.Error("Failed to get user", zap.Error(err), zap.String("username", username))
-		return errors.WrapBusinessError(10014, "Failed to get user", err)
+		return err
 	}
 
 	user.Avatar = filename
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		logger.Error("Failed to update user", zap.Error(err), zap.String("username", username))
-		return errors.WrapBusinessError(10017, "Failed to update user", err)
+		return err
 	}
 
-	logger.Info("Avatar updated successfully for", zap.String("username", username))
 	return nil
 }
 
-func (s *userService) GetUser(ctx context.Context, id uint) (*model.User, error) {
+func (s *userService) GetUser(ctx common.Context, id uint) (*model.User, error) {
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.ErrUserNotFound
+			return nil, err
 		}
-		logger.Error("Failed to get user", zap.Error(err), zap.Uint("user_id", id))
-		return nil, errors.WrapBusinessError(10014, "Failed to get user", err)
+		return nil, err
 	}
 	return user, nil
 }
 
-func (s *userService) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
+func (s *userService) GetUserByUsername(ctx common.Context, username string) (*model.User, error) {
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.ErrUserNotFound
+			return nil, err
 		}
-		logger.Error("Failed to get user", zap.Error(err), zap.String("username", username))
-		return nil, errors.WrapBusinessError(10015, "Failed to get user", err)
+		return nil, err
 	}
 	return user, nil
 }
 
-func (s *userService) UpdateUser(ctx context.Context, id uint, req *dto.UpdateUserRequest) (*model.User, error) {
+func (s *userService) UpdateUser(ctx common.Context, id uint, req *dto.UpdateUserRequest) (*model.User, error) {
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.ErrUserNotFound
+			return nil, err
 		}
-		return nil, errors.WrapBusinessError(10016, "Failed to get user", err)
+		return nil, err
 	}
 
 	if req.Email != "" {
@@ -207,25 +181,21 @@ func (s *userService) UpdateUser(ctx context.Context, id uint, req *dto.UpdateUs
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		logger.Error("Failed to update user", zap.Error(err), zap.Uint("user_id", id))
-		return nil, errors.WrapBusinessError(10017, "Failed to update user", err)
+		return nil, err
 	}
 
-	logger.Info("User updated successfully", zap.Uint("user_id", id))
 	return user, nil
 }
 
-func (s *userService) DeleteUser(ctx context.Context, id uint) error {
+func (s *userService) DeleteUser(ctx common.Context, id uint) error {
 	if err := s.userRepo.Delete(ctx, id); err != nil {
-		logger.Error("Failed to delete user", zap.Error(err), zap.Uint("user_id", id))
-		return errors.WrapBusinessError(10018, "Failed to delete user", err)
+		return err
 	}
 
-	logger.Info("User deleted successfully", zap.Uint("user_id", id))
 	return nil
 }
 
-func (s *userService) ListUsers(ctx context.Context, page, pageSize int) ([]*model.User, int64, error) {
+func (s *userService) ListUsers(ctx common.Context, page, pageSize int) ([]*model.User, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -239,8 +209,7 @@ func (s *userService) ListUsers(ctx context.Context, page, pageSize int) ([]*mod
 	offset := (page - 1) * pageSize
 	users, total, err := s.userRepo.List(ctx, offset, pageSize)
 	if err != nil {
-		logger.Error("Failed to get user list", zap.Error(err))
-		return nil, 0, errors.WrapBusinessError(10019, "Failed to get user list", err)
+		return nil, 0, err
 	}
 
 	return users, total, nil

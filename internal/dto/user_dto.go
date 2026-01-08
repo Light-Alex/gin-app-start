@@ -1,5 +1,7 @@
 package dto
 
+import "gin-app-start/internal/model"
+
 // CreateUserRequest represents the request to create a new user
 type CreateUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=32" example:"John Doe"`
@@ -30,4 +32,11 @@ type UpdateUserRequest struct {
 
 type LogoutRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=32" example:"John Doe"`
+}
+
+type ListUsersResponse struct {
+	Users    []*model.User `json:"users"`
+	Total    int64         `json:"total"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"page_size"`
 }

@@ -22,7 +22,18 @@ type PostgresConfig struct {
 	LogLevel     string
 }
 
-var DB *gorm.DB
+type Repo interface {
+	i()
+	GetDB() *gorm.DB
+	DbClose() error
+}
+
+type dbRepo struct {
+	DB *gorm.DB
+}
+
+// var DB *gorm.DB
+var DBRepo Repo
 
 func NewPostgresDB(config *PostgresConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
@@ -71,21 +82,27 @@ func NewPostgresDB(config *PostgresConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	DB = db
+	DBRepo = &dbRepo{DB: db}
+
+	// 使用插件
+	db.Use(&TracePlugin{})
+
 	return db, nil
 }
 
-func Close() error {
-	if DB != nil {
-		sqlDB, err := DB.DB()
+func (d *dbRepo) i() {}
+
+func (d *dbRepo) GetDB() *gorm.DB {
+	return d.DB
+}
+
+func (d *dbRepo) DbClose() error {
+	if d.DB != nil {
+		sqlDB, err := d.DB.DB()
 		if err != nil {
 			return err
 		}
 		return sqlDB.Close()
 	}
 	return nil
-}
-
-func GetDB() *gorm.DB {
-	return DB
 }

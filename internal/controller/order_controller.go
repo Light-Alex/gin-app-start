@@ -1,15 +1,15 @@
 package controller
 
 import (
+	"net/http"
+	"strconv"
+
+	"gin-app-start/internal/code"
 	"gin-app-start/internal/common"
 	"gin-app-start/internal/dto"
 	"gin-app-start/internal/service"
-	"gin-app-start/pkg/logger"
-	"gin-app-start/pkg/response"
-	"strconv"
-
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+	"gin-app-start/internal/validation"
+	"gin-app-start/pkg/errors"
 )
 
 type OrderController struct {
@@ -34,36 +34,51 @@ func NewOrderController(orderService service.OrderService) *OrderController {
 //	@Failure		400		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/orders [post]
-func (oc *OrderController) CreateOrder(c *gin.Context) {
-	var req dto.CreateOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+func (oc *OrderController) CreateOrder() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.CreateOrderRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
-		logger.Error("User %s can only create order for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	req.UserId = user.UserId
-	order, err := oc.orderService.CreateOrder(c.Request.Context(), &req)
-	if err != nil {
-		logger.Error("Create order failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	response.Success(c, order)
+		req.UserId = user.UserId
+		order, err := oc.orderService.CreateOrder(c, &req)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderCreateError,
+				code.Text(code.OrderCreateError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload(order)
+	}
 }
 
 // GetOrderByOrderNumber godoc
@@ -80,29 +95,43 @@ func (oc *OrderController) CreateOrder(c *gin.Context) {
 //	@Failure		404	{object}	response.Response
 //	@Failure		500	{object}	response.Response
 //	@Router			/api/v1/orders/search?order_number={order_number}&username={username} [get]
-func (oc *OrderController) GetOrderByOrderNumber(c *gin.Context) {
-	orderNumber := c.Query("order_number")
-	username := c.Query("username")
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserName != username {
-		logger.Error("User %s can only get order info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+func (oc *OrderController) GetOrderByOrderNumber() common.HandlerFunc {
+	return func(c common.Context) {
+		orderNumber := c.Query("order_number")
+		username := c.Query("username")
 
-	order, err := oc.orderService.GetOrderByOrderNumber(c.Request.Context(), orderNumber)
-	if err != nil {
-		logger.Error("Get order by order number failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
+
+		if user.UserName != common.ADMIN_NAME && user.UserName != username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		order, err := oc.orderService.GetOrderByOrderNumber(c, orderNumber)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderGetError,
+				code.Text(code.OrderGetError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload(order)
 	}
-	response.Success(c, order)
 }
 
 // UpdateOrderByOrderNumber godoc
@@ -118,34 +147,49 @@ func (oc *OrderController) GetOrderByOrderNumber(c *gin.Context) {
 //	@Failure		404		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/orders [put]
-func (oc *OrderController) UpdateOrderByOrderNumber(c *gin.Context) {
-	var req dto.UpdateOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+func (oc *OrderController) UpdateOrderByOrderNumber() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.UpdateOrderRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
-		logger.Error("User %s can only update order info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	order, err := oc.orderService.UpdateOrderByOrderNumber(c.Request.Context(), &req)
-	if err != nil {
-		logger.Error("Update order by order number failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+		if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		order, err := oc.orderService.UpdateOrderByOrderNumber(c, &req)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderUpdateError,
+				code.Text(code.OrderUpdateError)).WithError(err),
+			)
+			return
+		}
+		c.Payload(order)
 	}
-	response.Success(c, order)
 }
 
 // DeleteOrderByOrderNumber godoc
@@ -161,34 +205,78 @@ func (oc *OrderController) UpdateOrderByOrderNumber(c *gin.Context) {
 //	@Failure		404	{object}	response.Response
 //	@Failure		500	{object}	response.Response
 //	@Router			/api/v1/orders [delete]
-func (oc *OrderController) DeleteOrderByOrderNumber(c *gin.Context) {
-	var req dto.DeleteOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+func (oc *OrderController) DeleteOrderByOrderNumber() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.DeleteOrderRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
-		logger.Error("User %s can only update order info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	err = oc.orderService.DeleteOrderByOrderNumber(c.Request.Context(), req.OrderNumber)
-	if err != nil {
-		logger.Error("Delete order by order number failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+		if user.UserName != common.ADMIN_NAME && user.UserName != req.Username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		order, err := oc.orderService.GetOrderByOrderNumber(c, req.OrderNumber)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderGetError,
+				code.Text(code.OrderGetError)).WithError(err),
+			)
+			return
+		}
+
+		if order == nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderGetError,
+				code.Text(code.OrderGetError)).WithError(errors.New("order not found")),
+			)
+			return
+		}
+
+		if order.Username != req.Username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderDeleteError,
+				code.Text(code.OrderDeleteError)).WithError(errors.New("username and order number not match")),
+			)
+			return
+		}
+
+		err = oc.orderService.DeleteOrderByOrderNumber(c, req.OrderNumber)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderDeleteError,
+				code.Text(code.OrderDeleteError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload(req)
 	}
-	response.SuccessWithMessage(c, "Deleted successfully", nil)
 }
 
 // ListOrders godoc
@@ -204,29 +292,45 @@ func (oc *OrderController) DeleteOrderByOrderNumber(c *gin.Context) {
 //	@Success		200			{object}	response.Response
 //	@Failure		500			{object}	response.Response
 //	@Router			/api/v1/orders [get]
-func (oc *OrderController) ListOrders(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	username := c.DefaultQuery("username", "")
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserName != username {
-		logger.Error("User %s can only update order info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+func (oc *OrderController) ListOrders() common.HandlerFunc {
+	return func(c common.Context) {
+		var res dto.ListOrdersResponse
 
-	orders, total, err := oc.orderService.ListOrders(c.Request.Context(), username, page, pageSize)
-	if err != nil {
-		logger.Error("List orders failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+		username := c.DefaultQuery("username", "")
 
-	response.SuccessWithPage(c, orders, total, page, pageSize)
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
+
+		if user.UserName != common.ADMIN_NAME && user.UserName != username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		orders, total, err := oc.orderService.ListOrders(c, username, page, pageSize)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.OrderListError,
+				code.Text(code.OrderListError)).WithError(err),
+			)
+			return
+		}
+		res.Orders = orders
+		res.Total = total
+		c.Payload(res)
+	}
 }

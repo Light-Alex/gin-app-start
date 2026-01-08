@@ -1,5 +1,7 @@
 package dto
 
+import "gin-app-start/internal/model"
+
 // CreateOrderRequest represents the request to create a new order
 type CreateOrderRequest struct {
 	UserId      uint    `json:"user_id" binding:"omitempty" example:"1"`
@@ -27,4 +29,10 @@ type UpdateOrderRequest struct {
 type DeleteOrderRequest struct {
 	Username    string `json:"username" binding:"required" example:"John Doe"`
 	OrderNumber string `json:"order_number" binding:"required" example:"123456"`
+}
+
+// ListOrdersResponse represents the response to list orders
+type ListOrdersResponse struct {
+	Orders []*model.Order `json:"orders"`
+	Total  int64          `json:"total"`
 }

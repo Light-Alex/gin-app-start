@@ -66,27 +66,27 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
-    container_name: gin-app
-    ports:
-      - "9060:9060"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      SERVER_ENV: prod
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: gin_app
-      REDIS_ADDR: redis:6379
-      REDIS_PASSWORD: ""
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+  # app:
+  #   build: .
+  #   container_name: gin-app
+  #   ports:
+  #     - "9060:9060"
+  #   volumes:
+  #     - /etc/localtime:/etc/localtime:ro
+  #   environment:
+  #     SERVER_ENV: prod
+  #     DB_HOST: postgres
+  #     DB_USER: postgres
+  #     DB_PASSWORD: postgres
+  #     DB_NAME: gin_app
+  #     REDIS_ADDR: redis:6379
+  #     REDIS_PASSWORD: ""
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:

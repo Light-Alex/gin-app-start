@@ -5,6 +5,9 @@ server:
   write_timeout: 60
   limit_num: 100
 
+language:
+  local: zh-cn
+
 database:
   host: localhost
   port: 5432

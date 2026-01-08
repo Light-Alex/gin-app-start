@@ -5,6 +5,9 @@ server:
   write_timeout: 60
   limit_num: 100
 
+language:
+  local: zh-CN
+
 database:
   host: localhost
   port: 5432
@@ -23,10 +26,10 @@ redis:
   max_retries: 3
 
 log:
-  level: info
-  file_path: /var/log/gin-app/app.log
-  max_size: 100
-  max_age: 30
+  level: info # 日志级别，可选值：debug, info, warn, error, panic, fatal
+  file_path: /var/log/gin-app/app.log # 日志文件路径
+  max_size: 100 # 最大日志文件大小为100M
+  max_age: 30   # 最大日志文件保存时间为30天
 
 file:
   dir_name: 'public/file/'

@@ -10,16 +10,18 @@ import (
 	"syscall"
 	"time"
 
+	_ "gin-app-start/docs"
+	"gin-app-start/internal/common"
 	"gin-app-start/internal/config"
 	"gin-app-start/internal/controller"
 	"gin-app-start/internal/model"
+	"gin-app-start/internal/redis"
 	"gin-app-start/internal/repository"
 	"gin-app-start/internal/router"
 	"gin-app-start/internal/service"
 	"gin-app-start/pkg/database"
 	"gin-app-start/pkg/logger"
-
-	_ "gin-app-start/docs"
+	"gin-app-start/pkg/timeutil"
 
 	"go.uber.org/zap"
 )
@@ -51,12 +53,26 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	if err := logger.Init(cfg.Server.Mode, cfg.Log.FilePath); err != nil {
+	accessLogger, err := logger.Init(
+		cfg,
+
+		// 禁用控制台输出
+		logger.WithDisableConsole(),
+		// 添加自定义字段 "domain"，格式为 "项目名[环境]"，例如：go-gin-api[fat]，便于区分不同环境和项目的日志
+		logger.WithField("domain", fmt.Sprintf("%s[%s]", common.ProjectName, cfg.Server.Mode)),
+		// 设置时间格式为 "2006-01-02 15:04:05"
+		logger.WithTimeLayout(timeutil.CSTLayout),
+		// 日志输出到文件 cfg.Log.FilePath
+		logger.WithFileP(cfg.Log.FilePath),
+	)
+
+	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
 
-	logger.Info("Application starting", zap.String("version", Version), zap.String("mode", cfg.Server.Mode))
+	defer accessLogger.Sync()
+
+	accessLogger.Info("Application starting", zap.String("version", Version), zap.String("mode", cfg.Server.Mode))
 
 	db, err := database.NewPostgresDB(&database.PostgresConfig{
 		Host:         cfg.Database.Host,
@@ -71,17 +87,17 @@ func main() {
 		LogLevel:     cfg.Database.LogLevel,
 	})
 	if err != nil {
-		logger.Fatal("Failed to initialize database", zap.Error(err))
+		accessLogger.Fatal("Failed to initialize database", zap.Error(err))
 	}
-	defer database.Close()
+	defer database.DBRepo.DbClose()
 
-	logger.Info("Database connected successfully")
+	accessLogger.Info("Database connected successfully")
 
 	if cfg.Database.AutoMigrate {
 		if err := db.AutoMigrate(&model.User{}, &model.Order{}); err != nil {
-			logger.Fatal("Database migration failed", zap.Error(err))
+			accessLogger.Fatal("Database migration failed", zap.Error(err))
 		}
-		logger.Info("Database migration completed")
+		accessLogger.Info("Database migration completed")
 	}
 
 	redisClient, err := database.NewRedisClient(&database.RedisConfig{
@@ -93,10 +109,10 @@ func main() {
 		MaxRetries:   cfg.Redis.MaxRetries,
 	})
 	if err != nil {
-		logger.Warn("Failed to initialize Redis", zap.Error(err))
+		accessLogger.Warn("Failed to initialize Redis", zap.Error(err))
 	} else {
 		defer redisClient.Close()
-		logger.Info("Redis connected successfully")
+		accessLogger.Info("Redis connected successfully")
 	}
 
 	userRepo := repository.NewUserRepository(db)
@@ -104,16 +120,19 @@ func main() {
 	userController := controller.NewUserController(userService)
 	healthController := controller.NewHealthController()
 
-	redisRepo := repository.NewRedisRepository(redisClient, context.Background())
+	redisRepo := redis.NewRedisRepository(redisClient, context.Background())
 	orderRepo := repository.NewOrderRepository(db)
 	orderService := service.NewOrderService(orderRepo, redisRepo)
 	orderController := controller.NewOrderController(orderService)
 
-	r := router.SetupRouter(healthController, userController, orderController, cfg)
+	s, err := router.SetupRouter(accessLogger, healthController, userController, orderController, cfg)
+	if err != nil {
+		accessLogger.Fatal("Failed to initialize router", zap.Error(err))
+	}
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      r,
+		Handler:      s.Mux,
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
 	}
@@ -122,11 +141,11 @@ func main() {
 		appURL := fmt.Sprintf("http://localhost:%d", cfg.Server.Port)
 		swaggerURL := fmt.Sprintf("http://localhost:%d/swagger/index.html", cfg.Server.Port)
 
-		logger.Info("Server started", zap.String("url", appURL))
-		logger.Info("Swagger documentation", zap.String("url", swaggerURL))
+		accessLogger.Info("Server started", zap.String("url", appURL))
+		accessLogger.Info("Swagger documentation", zap.String("url", swaggerURL))
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Server failed to start", zap.Error(err))
+			accessLogger.Fatal("Server failed to start", zap.Error(err))
 		}
 	}()
 
@@ -134,14 +153,14 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Server shutting down...")
+	accessLogger.Info("Server shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("Server shutdown failed", zap.Error(err))
+		accessLogger.Error("Server shutdown failed", zap.Error(err))
 	}
 
-	logger.Info("Server stopped")
+	accessLogger.Info("Server stopped")
 }

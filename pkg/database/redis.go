@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"gin-app-start/pkg/logger"
-
 	"github.com/redis/go-redis/v9"
 )
 
@@ -40,8 +38,6 @@ func NewRedisClient(config *RedisConfig) (*redis.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to redis: %w", err)
 	}
-
-	logger.Info("connected to redis successfully")
 
 	return client, nil
 }

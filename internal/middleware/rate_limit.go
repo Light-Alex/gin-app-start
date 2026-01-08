@@ -1,9 +1,12 @@
 package middleware
 
 import (
-	"gin-app-start/pkg/response"
+	"net/http"
 	"sync"
 	"time"
+
+	"gin-app-start/internal/code"
+	"gin-app-start/internal/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,9 +99,15 @@ func RateLimit(rate int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.ClientIP()
 
+		context := common.NewContext(c)
+		defer common.ReleaseContext(context)
+
 		if !globalLimiter.allow(key) {
-			response.Error(c, 42900, "Too many requests, please try again later")
-			c.Abort()
+			context.AbortWithError(common.Error(
+				http.StatusTooManyRequests,
+				code.TooManyRequests,
+				code.Text(code.TooManyRequests)),
+			)
 			return
 		}
 

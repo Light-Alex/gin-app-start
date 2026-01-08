@@ -5,6 +5,9 @@ server:
   write_timeout: 60  # 写入超时时间，单位秒
   limit_num: 100     # 限流数（每秒请求数）
 
+language:
+  local: zh-cn
+
 database:
   host: ${DB_HOST}
   port: 5432

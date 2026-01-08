@@ -2,21 +2,20 @@ package controller
 
 import (
 	"encoding/json"
+	"net/http"
 	"path"
 	"strconv"
 
+	"gin-app-start/internal/code"
 	"gin-app-start/internal/common"
 	"gin-app-start/internal/config"
 	"gin-app-start/internal/dto"
 	"gin-app-start/internal/service"
+	"gin-app-start/internal/validation"
 	"gin-app-start/pkg/errors"
-	"gin-app-start/pkg/logger"
-	"gin-app-start/pkg/response"
 	"gin-app-start/pkg/utils"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type userSession struct {
@@ -28,11 +27,14 @@ type userSession struct {
 }
 
 func getUserSession(sessionData interface{}) (userSession, error) {
+	if sessionData == nil {
+		return userSession{}, errors.New("Session data is nil")
+	}
+
 	// 从session中获取用户信息
 	var user userSession
 	if err := json.Unmarshal(sessionData.([]byte), &user); err != nil {
-		logger.Error("Unmarshal user session data error:", zap.Error(err))
-		return user, errors.WrapBusinessError(10037, "Unmarshal user session data error", err)
+		return user, err
 	}
 
 	return user, nil
@@ -60,41 +62,52 @@ func NewUserController(userService service.UserService) *UserController {
 //	@Failure		400		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/users/login [post]
-func (ctrl *UserController) Login(c *gin.Context) {
-	var req dto.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
+func (ctrl *UserController) Login() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.LoginRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
+
+		u, err := ctrl.userService.Login(c, &req)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminLoginError,
+				code.Text(code.AdminLoginError)).WithError(err),
+			)
+			return
+		}
+
+		data := gin.H{
+			"userId":   u.ID,
+			"username": u.Username,
+			"phone":    u.Phone,
+			"email":    u.Email,
+			"avatar":   config.GlobalConfig.File.UrlPrefix + u.Avatar,
+		}
+
+		value, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusInternalServerError,
+				code.MarshalError,
+				code.Text(code.MarshalError)).WithError(err),
+			)
+			return
+		}
+
+		session := c.GetSession()
+		session.Set(common.SESSION_KEY, value)
+		session.Save()
+
+		c.Payload(data)
 	}
-
-	u, err := ctrl.userService.Login(c.Request.Context(), &req)
-	if err != nil {
-		logger.Error("Login failed: ", zap.Error(err))
-		response.Error(c, 10035, "Login failed: "+err.Error())
-		return
-	}
-
-	data := gin.H{
-		"userId":   u.ID,
-		"username": u.Username,
-		"phone":    u.Phone,
-		"email":    u.Email,
-		"avatar":   config.GlobalConfig.File.UrlPrefix + u.Avatar,
-	}
-
-	value, err := json.Marshal(data)
-	if err != nil {
-		logger.Error("Marshal data failed: ", zap.Error(err))
-		response.Error(c, 10035, "Login failed: "+err.Error())
-		return
-	}
-
-	session := sessions.Default(c)
-	session.Set(common.SESSION_KEY, value)
-	session.Save()
-
-	response.Success(c, data)
 }
 
 // CreateUser godoc
@@ -109,22 +122,29 @@ func (ctrl *UserController) Login(c *gin.Context) {
 //	@Failure		400		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/users [post]
-func (ctrl *UserController) CreateUser(c *gin.Context) {
-	var req dto.CreateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+func (ctrl *UserController) CreateUser() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.CreateUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	user, err := ctrl.userService.CreateUser(c.Request.Context(), &req)
-	if err != nil {
-		logger.Error("Create user failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+		user, err := ctrl.userService.CreateUser(c, &req)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminCreateError,
+				code.Text(code.AdminCreateError)).WithError(err),
+			)
+			return
+		}
+		c.Payload(user)
 	}
-
-	response.Success(c, user)
 }
 
 // CreateUser godoc
@@ -139,41 +159,56 @@ func (ctrl *UserController) CreateUser(c *gin.Context) {
 //	@Failure		400		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/users/change_pwd [post]
-func (ctrl *UserController) ChangePassword(c *gin.Context) {
-	var req dto.UpdatePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
+func (ctrl *UserController) ChangePassword() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.UpdatePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
+
+		// 校验请求中的用户名是否与session中的用户名一致
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
+
+		// 校验用户名是否一致
+		if user.UserName != common.ADMIN_NAME && req.Username != user.UserName {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		if err = ctrl.userService.UpdatePassword(c, &req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminModifyPasswordError,
+				code.Text(code.AdminModifyPasswordError)).WithError(err),
+			)
+			return
+		}
+
+		// 清除session，重新登录
+		session := c.GetSession()
+		session.Clear()
+		session.Save()
+
+		c.Payload("Change password success")
 	}
-
-	// 校验请求中的用户名是否与session中的用户名一致
-	session := sessions.Default(c)
-	sessionData := session.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	// 校验用户名是否一致
-	if user.UserName != common.ADMIN_NAME && req.Username != user.UserName {
-		logger.Error("User %s can only change own password", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
-
-	if err = ctrl.userService.UpdatePassword(c.Request.Context(), &req); err != nil {
-		logger.Error("Change password failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	session.Clear()
-	session.Save()
-
-	response.Success(c, nil)
 }
 
 // CreateUser godoc
@@ -189,56 +224,77 @@ func (ctrl *UserController) ChangePassword(c *gin.Context) {
 //	@Failure		400		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/users/upload_avatar [post]
-func (ctrl *UserController) UploadImage(c *gin.Context) {
-	username := c.PostForm("username")
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+func (ctrl *UserController) UploadImage() common.HandlerFunc {
+	return func(c common.Context) {
+		username := c.PostForm("username")
+
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
+
+		if user.UserName != common.ADMIN_NAME && username != user.UserName {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
+
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				code.Text(code.ParamBindError)).WithError(err),
+			)
+			return
+		}
+
+		_, err = ctrl.userService.GetUserByUsername(c, username)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminDetailError,
+				code.Text(code.AdminDetailError)).WithError(err),
+			)
+			return
+		}
+
+		dst := path.Join(config.GlobalConfig.File.DirName, username)
+
+		// 暂时保存文件到服务器，TODO:上传到oss、七牛云
+		filename, err := utils.SaveToFile(file, dst)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.FileUploadError,
+				code.Text(code.FileUploadError)).WithError(err),
+			)
+			return
+		}
+
+		err = ctrl.userService.UploadImage(c, username, filename)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminUpdateError,
+				code.Text(code.AdminUpdateError)).WithError(err),
+			)
+			return
+		}
+
+		// 返回头像url
+		avatarUrl := config.GlobalConfig.File.UrlPrefix + filename
+		c.Payload(avatarUrl)
 	}
-
-	if user.UserName != common.ADMIN_NAME && username != user.UserName {
-		logger.Error("User can only upload image for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
-
-	file, err := c.FormFile("name")
-	if err != nil {
-		logger.Error("Get form file failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	_, err = ctrl.userService.GetUserByUsername(c.Request.Context(), username)
-	if err != nil {
-		logger.Error("Get user by username failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	dst := path.Join(config.GlobalConfig.File.DirName, username)
-
-	// 暂时保存文件到服务器，TODO:上传到oss、七牛云
-	filename, err := utils.SaveToFile(file, dst)
-	if err != nil {
-		logger.Error("save to file error:", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	err = ctrl.userService.UploadImage(c.Request.Context(), username, filename)
-	if err != nil {
-		logger.Error("Upload image failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-
-	// 返回头像url
-	avatarUrl := config.GlobalConfig.File.UrlPrefix + filename
-	response.Success(c, avatarUrl)
 }
 
 // GetImage godoc
@@ -255,31 +311,43 @@ func (ctrl *UserController) UploadImage(c *gin.Context) {
 //	@Failure		404	{object}	response.Response
 //	@Failure		500	{object}	response.Response
 //	@Router			/api/v1/users/file?username={username}&imageName={imageName} [get]
-func (ctrl *UserController) GetImage(c *gin.Context) {
-	username := c.Query("username")
-	imageName := c.Query("imageName")
-	if username == "" || imageName == "" {
-		logger.Error("Parameter binding failed")
-		response.Error(c, 10001, "Parameter binding failed")
-		return
-	}
+func (ctrl *UserController) GetImage() common.HandlerFunc {
+	return func(c common.Context) {
+		username := c.Query("username")
+		imageName := c.Query("imageName")
+		if username == "" || imageName == "" {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamQueryError,
+				code.Text(code.ParamQueryError)).WithError(errors.New("username or imageName is empty")),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	if user.UserName != common.ADMIN_NAME && username != user.UserName {
-		logger.Error("User can only get image for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		if user.UserName != common.ADMIN_NAME && username != user.UserName {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	fileName := path.Join(config.GlobalConfig.File.DirName, username, imageName)
-	c.File(fileName)
+		fileName := path.Join(config.GlobalConfig.File.DirName, username, imageName)
+
+		c.File(fileName)
+	}
 }
 
 // GetUser godoc
@@ -295,36 +363,51 @@ func (ctrl *UserController) GetImage(c *gin.Context) {
 //	@Failure		404	{object}	response.Response
 //	@Failure		500	{object}	response.Response
 //	@Router			/api/v1/users/{id} [get]
-func (ctrl *UserController) GetUser(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		logger.Error("Invalid user ID", zap.Error(err))
-		response.Error(c, 10001, "Invalid user ID")
-		return
-	}
+func (ctrl *UserController) GetUser() common.HandlerFunc {
+	return func(c common.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.ParseUint(idStr, 10, 32)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParseError,
+				code.Text(code.ParseError)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
-		logger.Error("User can only get user info for own", zap.String("username", user.UserName), zap.Uint("session id", user.UserId), zap.Uint("request id", uint(id)))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	userData, err := ctrl.userService.GetUser(c.Request.Context(), uint(id))
-	if err != nil {
-		logger.Error("Get user failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	response.Success(c, userData)
+		userData, err := ctrl.userService.GetUser(c, uint(id))
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminDetailError,
+				code.Text(code.AdminDetailError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload(userData)
+	}
 }
 
 // UpdateUser godoc
@@ -341,43 +424,61 @@ func (ctrl *UserController) GetUser(c *gin.Context) {
 //	@Failure		404		{object}	response.Response
 //	@Failure		500		{object}	response.Response
 //	@Router			/api/v1/users/{id} [put]
-func (ctrl *UserController) UpdateUser(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		logger.Error("Invalid user ID", zap.Error(err))
-		response.Error(c, 10001, "Invalid user ID")
-		return
-	}
+func (ctrl *UserController) UpdateUser() common.HandlerFunc {
+	return func(c common.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.ParseUint(idStr, 10, 32)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParseError,
+				code.Text(code.ParseError)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
-		logger.Error("User can only get user info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	var req dto.UpdateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+		if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	userData, err := ctrl.userService.UpdateUser(c.Request.Context(), uint(id), &req)
-	if err != nil {
-		logger.Error("Update user failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		var req dto.UpdateUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	response.Success(c, userData)
+		userData, err := ctrl.userService.UpdateUser(c, uint(id), &req)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminUpdateError,
+				code.Text(code.AdminUpdateError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload(userData)
+	}
 }
 
 // DeleteUser godoc
@@ -393,35 +494,50 @@ func (ctrl *UserController) UpdateUser(c *gin.Context) {
 //	@Failure		404	{object}	response.Response
 //	@Failure		500	{object}	response.Response
 //	@Router			/api/v1/users/{id} [delete]
-func (ctrl *UserController) DeleteUser(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		logger.Error("Invalid user ID", zap.Error(err))
-		response.Error(c, 10001, "Invalid user ID")
-		return
-	}
+func (ctrl *UserController) DeleteUser() common.HandlerFunc {
+	return func(c common.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.ParseUint(idStr, 10, 32)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParseError,
+				code.Text(code.ParseError)).WithError(err),
+			)
+			return
+		}
 
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
-		logger.Error("User can only get user info for own", zap.String("username", user.UserName))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	if err := ctrl.userService.DeleteUser(c.Request.Context(), uint(id)); err != nil {
-		logger.Error("Delete user failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		if user.UserName != common.ADMIN_NAME && user.UserId != uint(id) {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	response.SuccessWithMessage(c, "Deleted successfully", nil)
+		if err := ctrl.userService.DeleteUser(c, uint(id)); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminDeleteError,
+				code.Text(code.AdminDeleteError)).WithError(err),
+			)
+			return
+		}
+
+		c.Payload("Deleted successfully")
+	}
 }
 
 // ListUsers godoc
@@ -436,69 +552,87 @@ func (ctrl *UserController) DeleteUser(c *gin.Context) {
 //	@Success		200			{object}	response.Response
 //	@Failure		500			{object}	response.Response
 //	@Router			/api/v1/users [get]
-func (ctrl *UserController) ListUsers(c *gin.Context) {
-	sessionData, _ := c.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
-	if user.UserName != common.ADMIN_NAME {
-		logger.Error("Only admin can get users list")
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+func (ctrl *UserController) ListUsers() common.HandlerFunc {
+	return func(c common.Context) {
+		var res dto.ListUsersResponse
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
+		if user.UserName != common.ADMIN_NAME {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
-	users, total, err := ctrl.userService.ListUsers(c.Request.Context(), page, pageSize)
-	if err != nil {
-		logger.Error("List users failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
+		users, total, err := ctrl.userService.ListUsers(c, page, pageSize)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AdminListError,
+				code.Text(code.AdminListError)).WithError(err),
+			)
+			return
+		}
+
+		res.Users = users
+		res.Total = total
+		res.Page = page
+		res.PageSize = pageSize
+
+		c.Payload(res)
 	}
-
-	response.SuccessWithPage(c, users, total, page, pageSize)
 }
 
-func (ctrl *UserController) Logout(c *gin.Context) {
-	var req dto.LogoutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("Parameter binding failed", zap.Error(err))
-		response.Error(c, 10001, "Parameter binding failed: "+err.Error())
-		return
-	}
+func (ctrl *UserController) Logout() common.HandlerFunc {
+	return func(c common.Context) {
+		var req dto.LogoutRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.ParamBindError,
+				validation.Error(err)).WithError(err),
+			)
+			return
+		}
 
-	session := sessions.Default(c)
-	sessionData := session.Get(common.SESSION_KEY)
-	user, err := getUserSession(sessionData)
-	if err != nil {
-		logger.Error("Get user session failed", zap.Error(err))
-		handleServiceError(c, err)
-		return
-	}
+		sessionData := c.SessionUserInfo()
+		user, err := getUserSession(sessionData)
+		if err != nil {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(err),
+			)
+			return
+		}
 
-	if user.UserName != req.Username {
-		logger.Error("User not authorized to logout", zap.String("username", req.Username))
-		response.Error(c, 10036, "overstepping authority")
-		return
-	}
+		if user.UserName != req.Username {
+			c.AbortWithError(common.Error(
+				http.StatusBadRequest,
+				code.AuthorizationError,
+				code.Text(code.AuthorizationError)).WithError(errors.New(user.UserName + " overstepping authority")),
+			)
+			return
+		}
 
-	session.Clear()
-	session.Save()
+		// 清除session，重新登录
+		session := c.GetSession()
+		session.Clear()
+		session.Save()
 
-	response.SuccessWithMessage(c, "Logout successfully", nil)
-}
-
-func handleServiceError(c *gin.Context, err error) {
-	var bizErr *errors.BusinessError
-	if e, ok := err.(*errors.BusinessError); ok {
-		bizErr = e
-		response.Error(c, bizErr.Code, bizErr.Message)
-	} else {
-		logger.Error("Unknown error", zap.Error(err))
-		response.Error(c, 50000, "Internal server error")
+		c.Payload("Logout successfully")
 	}
 }

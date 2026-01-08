@@ -1,43 +1,45 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
+	"gin-app-start/internal/common"
 	"gin-app-start/internal/dto"
 	"gin-app-start/internal/model"
+	"gin-app-start/internal/redis"
 	"gin-app-start/internal/repository"
 	"gin-app-start/pkg/errors"
-	"gin-app-start/pkg/logger"
 	"gin-app-start/pkg/utils"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 var _ OrderService = (*orderService)(nil)
 
 type OrderService interface {
-	CreateOrder(ctx context.Context, req *dto.CreateOrderRequest) (*model.Order, error)
-	GetOrderByOrderNumber(ctx context.Context, orderNumber string) (*model.Order, error)
-	UpdateOrderByOrderNumber(ctx context.Context, req *dto.UpdateOrderRequest) (*model.Order, error)
-	DeleteOrderByOrderNumber(ctx context.Context, orderNumber string) error
-	ListOrders(ctx context.Context, username string, page, pageSize int) ([]*model.Order, int64, error)
+	SaveOrderInCache(ctx common.Context, order *model.Order, expireTime time.Duration) error
+	SaveOrderListInCache(ctx common.Context, orders []*model.Order, total int64, username string, page, pageSize int, expireTime time.Duration) error
+	DeleteOrderListCache(ctx common.Context) error
 
-	GetOrderByID(ctx context.Context, id uint) (*model.Order, error)
-	UpdateOrder(ctx context.Context, id uint, req *dto.UpdateOrderRequest) (*model.Order, error)
-	DeleteOrder(ctx context.Context, id uint) error
+	CreateOrder(ctx common.Context, req *dto.CreateOrderRequest) (*model.Order, error)
+	GetOrderByOrderNumber(ctx common.Context, orderNumber string) (*model.Order, error)
+	UpdateOrderByOrderNumber(ctx common.Context, req *dto.UpdateOrderRequest) (*model.Order, error)
+	DeleteOrderByOrderNumber(ctx common.Context, orderNumber string) error
+	GetOrderByID(ctx common.Context, id uint) (*model.Order, error)
+	UpdateOrder(ctx common.Context, id uint, req *dto.UpdateOrderRequest) (*model.Order, error)
+	DeleteOrder(ctx common.Context, id uint) error
+	ListOrders(ctx common.Context, username string, page, pageSize int) ([]*model.Order, int64, error)
 }
 
 type orderService struct {
 	orderRepo  repository.OrderRepository
-	redisCache repository.RedisRepository
+	redisCache redis.RedisRepository
 }
 
-func NewOrderService(orderRepo repository.OrderRepository, redisCache repository.RedisRepository) OrderService {
+func NewOrderService(orderRepo repository.OrderRepository, redisCache redis.RedisRepository) OrderService {
 	return &orderService{
 		orderRepo:  orderRepo,
 		redisCache: redisCache,
@@ -52,75 +54,69 @@ func (s *orderService) getOrderListCacheKey(username string, page, pageSize int)
 	return fmt.Sprintf("order_list:%s:%d:%d", username, page, pageSize)
 }
 
-func (s *orderService) saveOrderInCache(order *model.Order, expireTime time.Duration) error {
+func (s *orderService) SaveOrderInCache(ctx common.Context, order *model.Order, expireTime time.Duration) error {
 	cacheKey := s.getOrderCacheKey(order.OrderNumber)
 
 	data, err := json.MarshalIndent(order, "", "  ")
 	if err != nil {
-		logger.Error("Failed to marshal order", zap.Error(err), zap.String("order_number", order.OrderNumber))
-		return errors.ErrOrderMarshalFailed
+		return err
 	}
 
-	if err := s.redisCache.SetWithExpire(cacheKey, string(data), expireTime); err != nil {
-		logger.Error("Failed to set order cache", zap.Error(err), zap.String("order_number", order.OrderNumber))
-		return errors.ErrOrderCacheFailed
+	if err := s.redisCache.SetWithExpire(cacheKey, string(data), expireTime, redis.WithTrace(ctx.Trace())); err != nil {
+		return err
 	}
-	logger.Info("Order cached successfully", zap.String("order_number", order.OrderNumber))
 	return nil
 }
 
 // 保存订单列表到Redis缓存, 设置过期时间为expireTime
-func (s *orderService) saveOrderListInCache(orders []*model.Order, total int64, username string, page, pageSize int, expireTime time.Duration) error {
+func (s *orderService) SaveOrderListInCache(ctx common.Context, orders []*model.Order, total int64, username string, page, pageSize int, expireTime time.Duration) error {
 	cacheKey := s.getOrderListCacheKey(username, page, pageSize)
 
 	data, err := json.MarshalIndent(orders, "", "  ")
 	if err != nil {
-		logger.Error("Failed to marshal order list", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
-		return errors.ErrOrderMarshalFailed
+		return err
 	}
 
-	s.redisCache.HashSet(cacheKey, expireTime, map[string]interface{}{
-		"orders": data,
-		"total":  total,
-	})
-	if err != nil {
-		logger.Error("Failed to set order list cache", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
-		return errors.ErrOrderCacheFailed
+	params := redis.HashParams{
+		Options: []redis.Option{redis.WithTrace(ctx.Trace())},
+		Values: []interface{}{
+			"orders", data,
+			"total", total,
+		},
 	}
 
-	logger.Info("Order list cached successfully", zap.Int("page", page), zap.Int("page_size", pageSize))
+	if err := s.redisCache.HashSet(cacheKey, expireTime, params); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // 删除订单列表缓存
-func (s *orderService) deleteOrderListCache() error {
+func (s *orderService) DeleteOrderListCache(ctx common.Context) error {
 	pattern := "order_list:*"
 	redisCtx := s.redisCache.GetRedisContext()
 	keys, err := s.redisCache.GetRedisClient().Keys(redisCtx, pattern).Result()
 	if err != nil {
-		logger.Error("Failed to scan keys", zap.Error(err), zap.String("pattern", pattern))
-		return errors.ErrRedisScanKeysFailed
+		return err
 	}
 
 	for _, key := range keys {
-		if err := s.redisCache.Delete(key); err != nil {
-			logger.Error("Failed to delete order list cache", zap.Error(err), zap.String("key", key))
-			return errors.ErrOrderListCacheDeleteFailed
+		if err := s.redisCache.Delete(key, redis.WithTrace(ctx.Trace())); err != nil {
+			return err
 		}
 	}
-	logger.Info("Order list cache deleted successfully", zap.String("pattern", pattern))
 	return nil
 }
 
-func (s *orderService) CreateOrder(ctx context.Context, req *dto.CreateOrderRequest) (*model.Order, error) {
+func (s *orderService) CreateOrder(ctx common.Context, req *dto.CreateOrderRequest) (*model.Order, error) {
 	// 生成订单号
 	orderNumber := utils.GenerateOrderNumberWithPrefix("EC")
 
 	order, err := s.GetOrderByOrderNumber(ctx, orderNumber)
 	// 如果订单号已存在, 则重新生成
 	if err == nil && order != nil {
-		logger.Error("Order already exists", zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderExists
+		return nil, errors.New("Order number already exists")
 	}
 
 	order = &model.Order{
@@ -134,31 +130,23 @@ func (s *orderService) CreateOrder(ctx context.Context, req *dto.CreateOrderRequ
 
 	// 保存订单到数据库
 	if err := s.orderRepo.Create(ctx, order); err != nil {
-		logger.Error("Failed to create order", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderCreateFailed
+		return nil, err
 	}
 
 	// 保存订单到Redis, 设置订单缓存过期时间为30min
-	if err := s.saveOrderInCache(order, 30*time.Minute); err != nil {
-		logger.Error("Failed to save order cache", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderCacheFailed
+	if err := s.SaveOrderInCache(ctx, order, 30*time.Minute); err != nil {
+		return nil, err
 	}
 
 	// 删除订单列表缓存
-	if err := s.deleteOrderListCache(); err != nil {
-		logger.Error("Failed to delete order list cache", zap.Error(err))
-		return nil, errors.ErrOrderListCacheDeleteFailed
+	if err := s.DeleteOrderListCache(ctx); err != nil {
+		return nil, err
 	}
-
-	logger.Info("Order created successfully",
-		zap.String("order_number", order.OrderNumber),
-		zap.Uint("order_id", order.ID),
-	)
 
 	return order, nil
 }
 
-func (s *orderService) GetOrderByOrderNumber(ctx context.Context, orderNumber string) (*model.Order, error) {
+func (s *orderService) GetOrderByOrderNumber(ctx common.Context, orderNumber string) (*model.Order, error) {
 	cacheKey := s.getOrderCacheKey(orderNumber)
 
 	// 检查缓存中是否已存在该订单号
@@ -166,13 +154,11 @@ func (s *orderService) GetOrderByOrderNumber(ctx context.Context, orderNumber st
 	if err == nil && orderStr != "" {
 		var order model.Order
 		if err := json.Unmarshal([]byte(orderStr), &order); err == nil {
-			logger.Info("Order retrieved from cache", zap.String("order_number", orderNumber))
 			return &order, nil
 		}
 	}
 
 	if err == nil && orderStr == "" {
-		logger.Warn("Query too frequently", zap.String("order_number", orderNumber))
 		return nil, nil
 	}
 
@@ -181,28 +167,25 @@ func (s *orderService) GetOrderByOrderNumber(ctx context.Context, orderNumber st
 		if err == gorm.ErrRecordNotFound {
 			// 缓存空值，防止缓存穿透
 			if err := s.redisCache.SetWithExpire(cacheKey, "", 30*time.Minute); err != nil {
-				logger.Error("Failed to set empty cache", zap.Error(err), zap.String("order_number", orderNumber))
+				return nil, err
 			}
-			return nil, errors.ErrEmptyCache
+			return nil, err
 		}
-		logger.Error("Failed to query order", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderFailed
+		return nil, err
 	}
 
 	// 保存订单到Redis, 设置订单缓存过期时间为30min
-	if err := s.saveOrderInCache(order, 30*time.Minute); err != nil {
-		logger.Error("Failed to save order cache", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderCacheFailed
+	if err := s.SaveOrderInCache(ctx, order, 30*time.Minute); err != nil {
+		return nil, err
 	}
 	return order, nil
 }
 
-func (s *orderService) UpdateOrderByOrderNumber(ctx context.Context, req *dto.UpdateOrderRequest) (*model.Order, error) {
+func (s *orderService) UpdateOrderByOrderNumber(ctx common.Context, req *dto.UpdateOrderRequest) (*model.Order, error) {
 	orderNumber := req.OrderNumber
 	order, err := s.GetOrderByOrderNumber(ctx, orderNumber)
 	if err != nil || order == nil {
-		logger.Error("Order not found", zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderNotFound
+		return nil, err
 	}
 
 	// 更新订单字段
@@ -217,76 +200,61 @@ func (s *orderService) UpdateOrderByOrderNumber(ctx context.Context, req *dto.Up
 	}
 
 	if err := s.orderRepo.Update(ctx, order); err != nil {
-		logger.Error("Failed to update order", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderUpdateFailed
+		return nil, err
 	}
 
 	// 保存订单到Redis, 设置订单缓存过期时间为30min
-	if err := s.saveOrderInCache(order, 30*time.Minute); err != nil {
-		logger.Error("Failed to save order cache", zap.Error(err), zap.String("order_number", orderNumber))
-		return nil, errors.ErrOrderCacheFailed
+	if err := s.SaveOrderInCache(ctx, order, 30*time.Minute); err != nil {
+		return nil, err
 	}
 
 	// 删除订单列表缓存
-	if err := s.deleteOrderListCache(); err != nil {
-		logger.Error("Failed to delete order list cache", zap.Error(err))
-		return nil, errors.ErrOrderListCacheDeleteFailed
+	if err := s.DeleteOrderListCache(ctx); err != nil {
+		return nil, err
 	}
-
-	logger.Info("Order updated successfully", zap.String("order_number", orderNumber))
 	return order, nil
 }
 
-func (s *orderService) DeleteOrderByOrderNumber(ctx context.Context, orderNumber string) error {
+func (s *orderService) DeleteOrderByOrderNumber(ctx common.Context, orderNumber string) error {
 	order, err := s.GetOrderByOrderNumber(ctx, orderNumber)
 	if err != nil || order == nil {
-		logger.Error("Order not found", zap.String("order_number", orderNumber))
-		return errors.ErrOrderNotFound
+		return err
 	}
 
 	// 删除订单缓存
 	if err := s.redisCache.Delete(s.getOrderCacheKey(orderNumber)); err != nil {
-		logger.Error("Failed to delete order cache", zap.Error(err), zap.String("order_number", orderNumber))
-		return errors.ErrOrderCacheDeleteFailed
+		return err
 	}
 
 	// 删除订单列表缓存
-	if err := s.deleteOrderListCache(); err != nil {
-		logger.Error("Failed to delete order list cache", zap.Error(err))
-		return errors.ErrOrderListCacheDeleteFailed
+	if err := s.DeleteOrderListCache(ctx); err != nil {
+		return err
 	}
 
 	if err := s.orderRepo.Delete(ctx, order.ID); err != nil {
-		logger.Error("Failed to delete order", zap.Error(err), zap.String("order_number", orderNumber))
-		return errors.ErrOrderDeleteFailed
+		return err
 	}
-
-	logger.Info("Order deleted successfully", zap.String("order_number", orderNumber))
 	return nil
 }
 
-func (s *orderService) GetOrderByID(ctx context.Context, id uint) (*model.Order, error) {
+func (s *orderService) GetOrderByID(ctx common.Context, id uint) (*model.Order, error) {
 	order, err := s.orderRepo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			logger.Error("Order not found", zap.Uint("order_id", id))
-			return nil, errors.ErrOrderNotFound
+			return nil, err
 		}
-		logger.Error("Failed to query order", zap.Error(err), zap.Uint("order_id", id))
-		return nil, errors.ErrOrderFailed
+		return nil, err
 	}
 	return order, nil
 }
 
-func (s *orderService) UpdateOrder(ctx context.Context, id uint, req *dto.UpdateOrderRequest) (*model.Order, error) {
+func (s *orderService) UpdateOrder(ctx common.Context, id uint, req *dto.UpdateOrderRequest) (*model.Order, error) {
 	order, err := s.orderRepo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			logger.Error("Order not found", zap.Uint("order_id", id))
-			return nil, errors.ErrOrderNotFound
+			return nil, err
 		}
-		logger.Error("Failed to query order", zap.Error(err), zap.Uint("order_id", id))
-		return nil, errors.ErrOrderFailed
+		return nil, err
 	}
 
 	// 更新订单字段
@@ -301,24 +269,19 @@ func (s *orderService) UpdateOrder(ctx context.Context, id uint, req *dto.Update
 	}
 
 	if err := s.orderRepo.Update(ctx, order); err != nil {
-		logger.Error("Failed to update order", zap.Error(err), zap.Uint("order_id", id))
-		return nil, errors.ErrOrderUpdateFailed
+		return nil, err
 	}
-
-	logger.Info("Order updated successfully", zap.Uint("order_id", id))
 	return order, nil
 }
 
-func (s *orderService) DeleteOrder(ctx context.Context, id uint) error {
+func (s *orderService) DeleteOrder(ctx common.Context, id uint) error {
 	if err := s.orderRepo.Delete(ctx, id); err != nil {
-		logger.Error("Failed to delete order", zap.Error(err), zap.Uint("order_id", id))
-		return errors.ErrOrderDeleteFailed
+		return err
 	}
-	logger.Info("Order deleted successfully", zap.Uint("order_id", id))
 	return nil
 }
 
-func (s *orderService) ListOrders(ctx context.Context, username string, page, pageSize int) ([]*model.Order, int64, error) {
+func (s *orderService) ListOrders(ctx common.Context, username string, page, pageSize int) ([]*model.Order, int64, error) {
 	// 从Redis缓存中获取订单列表
 	cacheKey := s.getOrderListCacheKey(username, page, pageSize)
 	cachedOrders, _ := s.redisCache.HashGet(cacheKey, "orders")
@@ -326,18 +289,15 @@ func (s *orderService) ListOrders(ctx context.Context, username string, page, pa
 	if cachedOrders != "" && cachedTotal != "" {
 		total, err := strconv.ParseInt(cachedTotal, 10, 64)
 		if err != nil {
-			logger.Error("Failed to parse total from cache", zap.Error(err), zap.String("total", cachedTotal))
-			return nil, 0, errors.ErrOrderCacheParseTotalFailed
+			return nil, 0, err
 		}
 
 		var orders []*model.Order
 		err = json.Unmarshal([]byte(cachedOrders), &orders)
 		if err != nil {
-			logger.Error("Failed to unmarshal orders from cache", zap.Error(err), zap.String("orders", cachedOrders))
-			return nil, 0, errors.ErrOrderCacheUnmarshalFailed
+			return nil, 0, err
 		}
 
-		logger.Info("Orders retrieved from cache", zap.Int("page", page), zap.Int("page_size", pageSize), zap.Int64("total", total))
 		return orders, total, nil
 	}
 
@@ -354,14 +314,12 @@ func (s *orderService) ListOrders(ctx context.Context, username string, page, pa
 	offset := (page - 1) * pageSize
 	orders, total, err := s.orderRepo.List(ctx, username, offset, pageSize)
 	if err != nil {
-		logger.Error("Failed to list orders", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
-		return nil, 0, errors.ErrOrderListFailed
+		return nil, 0, err
 	}
 
 	// 保存订单列表到Redis缓存, 设置过期时间为5min
-	if err := s.saveOrderListInCache(orders, total, username, page, pageSize, 30*time.Minute); err != nil {
-		logger.Error("Failed to save order list cache", zap.Error(err), zap.Int("page", page), zap.Int("page_size", pageSize))
-		return nil, 0, errors.ErrOrderCacheFailed
+	if err := s.SaveOrderListInCache(ctx, orders, total, username, page, pageSize, 30*time.Minute); err != nil {
+		return nil, 0, err
 	}
 
 	return orders, total, nil

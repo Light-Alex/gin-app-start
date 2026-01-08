@@ -12,6 +12,7 @@ https://github.com/pengfeidai/gin-app-start
 7. 添加redis业务逻辑
 8. 新增sesson认证机制
 9. 新增角色：admin、普通用户
+10. 统一日志打印和错误码
 
 
 
@@ -47,28 +48,96 @@ https://github.com/pengfeidai/gin-app-start
 
 ```
 gin-app-start/
-├── cmd/                    # 应用程序入口
+├── cmd/                             # 应用程序入口
 │   └── server/
-│       └── main.go        # 主入口文件
-├── internal/              # 私有应用程序代码
-│   ├── config/           # 配置加载
-│   ├── controller/       # HTTP 控制器层
-│   ├── service/          # 业务逻辑层
-│   ├── repository/       # 数据访问层
-│   ├── model/            # 数据模型
-│   ├── middleware/       # Gin 中间件
-│   └── router/           # 路由配置
-├── pkg/                  # 公共库代码
-│   ├── database/         # 数据库连接
-│   ├── logger/           # 日志处理
-│   ├── errors/           # 错误处理
-│   └── response/         # 统一响应格式
-├── configs/              # 配置文件
-│   ├── config.local.yaml
-│   ├── config.dev.yaml
-│   └── config.prod.yaml
-├── go.mod
-└── go.sum
+│       └── main.go                  # 主入口文件，应用启动和初始化
+├── internal/                        # 私有应用程序代码
+│   ├── code/                        # 错误码定义和多语言错误消息
+│   │   ├── code.go                  # 错误码常量定义
+│   │   ├── zh-cn.go                 # 中文错误消息
+│   │   └── en-us.go                 # 英文错误消息
+│   ├── common/                      # 通用工具和常量
+│   │   ├── constant.go              # 全局常量定义
+│   │   ├── context.go               # 上下文管理工具
+│   │   └── error.go                 # 错误处理工具
+│   ├── config/                      # 配置管理
+│   │   └── config.go                # 配置加载和解析
+│   ├── controller/                  # HTTP 控制器层（处理请求和响应）
+│   │   ├── health_controller.go     # 健康检查控制器
+│   │   ├── user_controller.go       # 用户管理控制器
+│   │   └── order_controller.go      # 订单管理控制器
+│   ├── dto/                         # 数据传输对象（Data Transfer Objects）
+│   │   ├── user_dto.go              # 用户相关DTO
+│   │   └── order_dto.go             # 订单相关DTO
+│   ├── interceptor/                 # 拦截器（GRPC/中间件）
+│   │   ├── interceptor.go           # 通用拦截器
+│   │   └── session_auth.go          # Session认证拦截器
+│   ├── middleware/                  # Gin中间件
+│   │   ├── cors.go                  # 跨域中间件
+│   │   ├── logger.go                # 日志中间件
+│   │   ├── rate_limit.go            # 限流中间件
+│   │   └── recovery.go              # 异常恢复中间件
+│   ├── model/                       # 数据模型定义
+│   │   ├── user.go                  # 用户数据模型
+│   │   └── order.go                 # 订单数据模型
+│   ├── redis/                       # Redis业务逻辑层
+│   │   └── redis_repository.go      # Redis数据访问实现
+│   ├── repository/                  # 数据访问层（数据库操作）
+│   │   ├── base_repository.go       # 基础仓储接口
+│   │   ├── user_repository.go       # 用户数据访问
+│   │   └── order_repository.go      # 订单数据访问
+│   ├── router/                      # 路由配置
+│   │   └── router.go                # 路由注册和中间件配置
+│   ├── service/                     # 业务逻辑层
+│   │   ├── user_service.go          # 用户业务逻辑
+│   │   └── order_service.go         # 订单业务逻辑
+│   └── validation/                  # 数据验证
+│       └── validation.go            # 验证器实现
+├── pkg/                             # 公共库代码（可被外部项目引用）
+│   ├── color/                       # 终端颜色输出工具
+│   │   └── string_*.go              # 平台相关的字符串颜色处理
+│   ├── database/                    # 数据库连接管理
+│   │   ├── postgres.go              # PostgreSQL连接初始化
+│   │   ├── redis.go                 # Redis连接初始化
+│   │   └── sql_plugin.go            # SQL插件支持
+│   ├── errors/                      # 统一错误处理
+│   │   ├── err.go                   # 业务错误定义和工具
+│   │   └── err_test.go              # 错误处理单元测试
+│   ├── logger/                      # 日志处理
+│   │   └── logger.go                # Zap日志封装
+│   ├── response/                    # 统一响应格式
+│   │   └── response.go              # HTTP响应封装
+│   ├── timeutil/                    # 时间工具
+│   │   ├── timeutil.go              # 时间处理工具函数
+│   │   └── timeutil_test.go         # 时间工具单元测试
+│   ├── trace/                       # 链路追踪工具
+│   │   ├── trace.go                 # 追踪功能实现
+│   │   ├── debug.go                 # 调试工具
+│   │   ├── dialog.go                # 对话工具
+│   │   ├── sql.go                   # SQL追踪
+│   │   └── redis.go                 # Redis追踪
+│   └── utils/                       # 通用工具函数
+│       ├── crypto.go                # 加密解密工具
+│       └── utils.go                 # 杂项工具函数
+├── configs/                         # 配置文件目录
+│   ├── config.local.yaml            # 本地开发环境配置
+│   ├── config.dev.yaml              # 开发环境配置
+│   └── config.prod.yaml             # 生产环境配置
+├── docs/                            # 项目文档
+│   ├── PROJECT_GUIDE.md             # 项目使用指南
+│   ├── API_REFERENCE.md             # API接口文档
+│   ├── ARCHITECTURE.md              # 架构设计文档
+│   ├── docs.go                      # Swagger文档生成
+│   ├── swagger.json                 # Swagger JSON规范
+│   └── swagger.yaml                 # Swagger YAML规范
+├── .gitignore                       # Git忽略文件配置
+├── .vscode/                         # VSCode配置
+├── docker-compose.yml               # Docker编排配置
+├── Dockerfile                       # Docker镜像构建文件
+├── go.mod                           # Go模块依赖定义
+├── go.sum                           # Go模块依赖校验和
+├── Makefile                         # Make构建脚本
+└── README.md                        # 项目说明文档
 ```
 
 ## 快速开始
@@ -143,10 +212,10 @@ POST /api/v1/users
 Content-Type: application/json
 
 {
-  "username": "testuser",
-  "email": "test@example.com",
-  "phone": "13800138000",
-  "password": "password123"
+  "username": "Tim",
+  "email": "Tim@example.com",
+  "phone": "13800178333",
+  "password": "123456"
 }
 ```
 
@@ -154,59 +223,21 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 2,
-        "created_at": "2025-12-03T11:55:06.317239131+08:00",
-        "update_at": "2025-12-03T11:55:06.317239221+08:00",
-        "username": "testuser16",
-        "email": "testuser16@example.com",
-        "phone": "13800138016",
-        "avatar": "",
-        "status": 1
-    }
+    "id": 8,
+    "created_at": "2026-01-08T11:28:49.432732891+08:00",
+    "update_at": "2026-01-08T11:28:49.432732941+08:00",
+    "username": "Tim",
+    "email": "Tim@example.com",
+    "phone": "13800178333",
+    "avatar": "",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
 {
-    "code": 10001,
-    "message": "Parameter binding failed: Key: 'CreateUserRequest.Username' Error:Field validation for 'Username' failed on the 'required' tag",
-    "data": null
-}
-```
-
-#### 获取用户
-
-**request：**
-```bash
-GET /api/v1/users/:id
-```
-**response：**
-- 成功响应：
-```json
-{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 1,
-        "created_at": "2025-11-26T22:01:26.823447+08:00",
-        "update_at": "2025-11-26T22:01:26.823447+08:00",
-        "username": "testuser15",
-        "email": "testuser15@example.com",
-        "phone": "13800138015",
-        "avatar": "",
-        "status": 1
-    }
-}
-```
-- 错误响应：
-```json
-{
-    "code": 10002,
-    "message": "User not found",
-    "data": null
+    "code": 20201,
+    "message": "创建管理员失败"
 }
 ```
 
@@ -217,8 +248,8 @@ POST /api/v1/users/login
 Content-Type: application/json
 
 {
-  "username": "testuser15",
-  "password": "password123"
+    "username": "Tim",
+    "password": "123456"
 }
 ```
 
@@ -226,23 +257,18 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "avatar": "http://127.0.0.1:9060/api/v1/gin-app-start/file/",
-        "email": "admin6@example.com",
-        "phone": "13800138022",
-        "userId": 3,
-        "username": "admin"
-    }
+    "avatar": "http://127.0.0.1:9060/api/v1/gin-app-start/file/",
+    "email": "Tim@example.com",
+    "phone": "13800178333",
+    "userId": 8,
+    "username": "Tim"
 }
 ```
 - 错误响应：
 ```json
 {
-    "code": 10035,
-    "message": "Login failed: code: 10035, message: Login failed",
-    "data": null
+    "code": 20206,
+    "message": "登录失败"
 }
 ```
 
@@ -256,27 +282,19 @@ GET /api/v1/users/:id
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 3,
-        "created_at": "2025-12-05T16:13:49.914463+08:00",
-        "update_at": "2025-12-05T16:13:49.914463+08:00",
-        "username": "admin",
-        "email": "admin6@example.com",
-        "phone": "13800138022",
-        "avatar": "",
-        "status": 1
-    }
+    "id": 8,
+    "created_at": "2026-01-08T11:28:49.432732+08:00",
+    "update_at": "2026-01-08T11:28:49.432732+08:00",
+    "username": "Tim",
+    "email": "Tim@example.com",
+    "phone": "13800178333",
+    "avatar": "",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 
@@ -287,8 +305,8 @@ PUT /api/v1/users/:id
 Content-Type: application/json
 
 {
-  "email": "newemail@example.com",
-  "phone": "13900139000"
+  "email": "Tim@example.com",
+  "phone": "13800178334"
 }
 ```
 
@@ -296,27 +314,19 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 4,
-        "created_at": "2025-12-05T16:53:10.935254+08:00",
-        "update_at": "2025-12-05T17:08:28.409947122+08:00",
-        "username": "user2",
-        "email": "user4@example.com",
-        "phone": "13900139024",
-        "avatar": "",
-        "status": 1
-    }
+    "id": 8,
+    "created_at": "2026-01-08T11:28:49.432732+08:00",
+    "update_at": "2026-01-08T14:38:36.347845976+08:00",
+    "username": "Tim",
+    "email": "Tim@example.com",
+    "phone": "13800178334",
+    "avatar": "",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 更改密码
@@ -326,29 +336,21 @@ POST /api/v1/users/change_pwd
 Content-Type: application/json
 
 {
-  "username": "user2",
-  "old_password": "password123",
-  "new_password": "newpassword123"
+    "username": "Tim",
+    "old_password": "123456",
+    "new_password": "1234567"
 }
 ```
 
 **response：**
 - 成功响应：
 ```json
-{
-    "code": 0,
-    "message": "success",
-    "data": null
-}
+"Change password success"
 ```
 
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 上传头像
@@ -366,25 +368,17 @@ Content-Type: multipart/form-data
 **response：**
 - 成功响应：
 ```json
-{
-    "code": 0,
-    "message": "success",
-    "data": "http://127.0.0.1:9060/api/v1/gin-app-start/file/f389f6b0-cffa-4ad8-b7ab-64ab8d20f498.png"
-}
+"http://127.0.0.1:9060/api/v1/gin-app-start/file/63dedf56-bf03-4976-a202-4a049fd76cbe.png"
 ```
 
 - 错误响应：
 ```json
-{
-    "code": 10002,
-    "message": "User not found",
-    "data": null
-}
+{"code":10103,"message":"参数信息错误"}
 ```
 
 #### 获取头像
 ```bash
-GET /api/v1/users/:id/avatar
+GET /api/v1/users/file?username=Tim&imageName=63dedf56-bf03-4976-a202-4a049fd76cbe.png
 ```
 
 **response：**
@@ -395,11 +389,7 @@ GET /api/v1/users/:id/avatar
 
 - 错误响应：
 ```json
-{
-    "code": 10003,
-    "message": "Unauthorized access",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 删除用户
@@ -407,19 +397,11 @@ GET /api/v1/users/:id/avatar
 **response：**
 - 成功响应：
 ```json
-{
-    "code": 0,
-    "message": "Deleted successfully",
-    "data": null
-}
+"Deleted successfully"
 ```
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 用户列表
@@ -431,54 +413,76 @@ GET /api/v1/users?page=1&page_size=10
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "list": [
-            {
-                "id": 1,
-                "created_at": "2025-11-26T22:01:26.823447+08:00",
-                "update_at": "2025-12-03T11:58:43.290084+08:00",
-                "username": "testuser15",
-                "email": "newemail2@example.com",
-                "phone": "13900139020",
-                "avatar": "",
-                "status": 1
-            },
-            {
-                "id": 3,
-                "created_at": "2025-12-05T16:13:49.914463+08:00",
-                "update_at": "2025-12-05T16:13:49.914463+08:00",
-                "username": "admin",
-                "email": "admin6@example.com",
-                "phone": "13800138022",
-                "avatar": "",
-                "status": 1
-            },
-            {
-                "id": 4,
-                "created_at": "2025-12-05T16:53:10.935254+08:00",
-                "update_at": "2025-12-05T17:13:47.639198+08:00",
-                "username": "user2",
-                "email": "user4@example.com",
-                "phone": "13900139024",
-                "avatar": "",
-                "status": 1
-            }
-        ],
-        "total": 3,
-        "page": 1,
-        "page_size": 10
-    }
+    "users": [
+        {
+            "id": 1,
+            "created_at": "2025-11-26T22:01:26.823447+08:00",
+            "update_at": "2025-12-03T11:58:43.290084+08:00",
+            "username": "testuser15",
+            "email": "newemail2@example.com",
+            "phone": "13900139020",
+            "avatar": "",
+            "status": 1
+        },
+        {
+            "id": 3,
+            "created_at": "2025-12-05T16:13:49.914463+08:00",
+            "update_at": "2025-12-05T16:13:49.914463+08:00",
+            "username": "admin",
+            "email": "admin6@example.com",
+            "phone": "13800138022",
+            "avatar": "",
+            "status": 1
+        },
+        {
+            "id": 4,
+            "created_at": "2025-12-05T16:53:10.935254+08:00",
+            "update_at": "2025-12-06T14:48:16.517959+08:00",
+            "username": "user2",
+            "email": "user4@example.com",
+            "phone": "13900139024",
+            "avatar": "6f36618d-75af-46a0-9462-7fa631919b97.png",
+            "status": 1
+        },
+        {
+            "id": 5,
+            "created_at": "2025-12-06T15:00:58.802902+08:00",
+            "update_at": "2025-12-06T15:01:26.206152+08:00",
+            "username": "Jone Bob",
+            "email": "user3@example.com",
+            "phone": "13800138322",
+            "avatar": "018e3025-dd71-4d14-9cc5-e08751a52d8f.png",
+            "status": 1
+        },
+        {
+            "id": 7,
+            "created_at": "2025-12-06T15:28:13.037356+08:00",
+            "update_at": "2025-12-06T15:28:13.037356+08:00",
+            "username": "Bob",
+            "email": "Bob@example.com",
+            "phone": "13800178320",
+            "avatar": "",
+            "status": 1
+        },
+        {
+            "id": 8,
+            "created_at": "2026-01-08T11:28:49.432732+08:00",
+            "update_at": "2026-01-08T14:53:04.488063+08:00",
+            "username": "Tim",
+            "email": "Tim@example.com",
+            "phone": "13800178334",
+            "avatar": "c4808961-71b5-45dd-ba94-84ec4ba6a36c.png",
+            "status": 1
+        }
+    ],
+    "total": 6,
+    "page": 1,
+    "page_size": 10
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10003,
-    "message": "Unauthorized access",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 退出登录
@@ -488,26 +492,18 @@ POST /api/v1/users/logout
 Content-Type: application/json
 
 {
-  "username": "Bob"
+    "username": "admin"
 }
 ```
 
 **response：**
 - 成功响应：
 ```json
-{
-    "code": 0,
-    "message": "Logout successfully",
-    "data": null
-}
+"Logout successfully"
 ```
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 ### 订单管理
@@ -528,28 +524,20 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 1,
-        "order_number": "EC20251206344246",
-        "created_at": "2025-12-06T15:40:04.018367555+08:00",
-        "update_at": "2025-12-06T15:40:04.018367625+08:00",
-        "user_id": 7,
-        "username": "Bob",
-        "total_price": 62,
-        "description": "Good!",
-        "status": 1
-    }
+    "id": 7,
+    "order_number": "EC20260108124133",
+    "created_at": "2026-01-08T14:58:00.803234908+08:00",
+    "update_at": "2026-01-08T14:58:00.803234958+08:00",
+    "user_id": 3,
+    "username": "user2",
+    "total_price": 50,
+    "description": "Good quality",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10003,
-    "message": "Unauthorized access",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 获取订单
@@ -561,28 +549,20 @@ GET /api/v1/orders/search?order_number=EC20251202659066&username=Bob
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 1,
-        "order_number": "EC20251206344246",
-        "created_at": "2025-12-06T15:40:04.018367555+08:00",
-        "update_at": "2025-12-06T15:40:04.018367625+08:00",
-        "user_id": 7,
-        "username": "Bob",
-        "total_price": 62,
-        "description": "Good!",
-        "status": 1
-    }
+    "id": 1,
+    "order_number": "EC20251206344246",
+    "created_at": "2025-12-06T15:40:04.018367+08:00",
+    "update_at": "2025-12-06T15:44:10.473489+08:00",
+    "user_id": 7,
+    "username": "Bob",
+    "total_price": 40,
+    "description": "Bad product!!!",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10029,
-    "message": "Set empty cache",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 #### 更新订单
@@ -592,9 +572,11 @@ PUT /api/v1/orders/:order_number
 Content-Type: application/json
 
 {
-  "description": "Order for John Doe",
-  "status": 1,
-  "total_price": 99.99
+  "username": "Bob",
+  "order_number": "EC20251206344246",
+  "total_price": 44,
+  "description": "Bad product!!!",
+  "status": 0
 }
 ```
 
@@ -602,28 +584,20 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "id": 1,
-        "order_number": "EC20251206344246",
-        "created_at": "2025-12-06T15:40:04.018367555+08:00",
-        "update_at": "2025-12-06T15:44:10.473489694+08:00",
-        "user_id": 7,
-        "username": "Bob",
-        "total_price": 40,
-        "description": "Bad product!!!",
-        "status": 1
-    }
+    "id": 1,
+    "order_number": "EC20251206344246",
+    "created_at": "2025-12-06T15:40:04.018367+08:00",
+    "update_at": "2026-01-08T15:12:34.054476758+08:00",
+    "user_id": 7,
+    "username": "Bob",
+    "total_price": 44,
+    "description": "Bad product!!!",
+    "status": 1
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10023,
-    "message": "Order not found",
-    "data": null
-}
+{"code":20503,"message":"更新订单失败"}
 ```
 
 #### 删除订单
@@ -641,18 +615,13 @@ Content-Type: application/json
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "Deleted successfully",
-    "data": null
+    "username": "Bob",
+    "order_number": "EC20251206344246"
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10023,
-    "message": "Order not found",
-    "data": null
-}
+{"code":20504,"message":"删除订单失败"}
 ```
 
 #### 订单列表
@@ -664,57 +633,36 @@ GET /api/v1/orders?username=Bob
 - 成功响应：
 ```json
 {
-    "code": 0,
-    "message": "success",
-    "data": {
-        "list": [
-            {
-                "id": 1,
-                "order_number": "EC20251206344246",
-                "created_at": "2025-12-06T15:40:04.018367+08:00",
-                "update_at": "2025-12-06T15:44:10.473489+08:00",
-                "user_id": 7,
-                "username": "Bob",
-                "total_price": 40,
-                "description": "Bad product!!!",
-                "status": 1
-            },
-            {
-                "id": 3,
-                "order_number": "EC20251206794733",
-                "created_at": "2025-12-06T15:45:08.447049+08:00",
-                "update_at": "2025-12-06T15:45:08.447049+08:00",
-                "user_id": 7,
-                "username": "Bob",
-                "total_price": 65,
-                "description": "Good",
-                "status": 1
-            },
-            {
-                "id": 4,
-                "order_number": "EC20251206169258",
-                "created_at": "2025-12-06T15:45:17.993545+08:00",
-                "update_at": "2025-12-06T15:45:17.993545+08:00",
-                "user_id": 7,
-                "username": "Bob",
-                "total_price": 99,
-                "description": "Very Good!!!",
-                "status": 1
-            }
-        ],
-        "total": 3,
-        "page": 1,
-        "page_size": 10
-    }
+    "orders": [
+        {
+            "id": 3,
+            "order_number": "EC20251206794733",
+            "created_at": "2025-12-06T15:45:08.447049+08:00",
+            "update_at": "2025-12-06T15:45:08.447049+08:00",
+            "user_id": 7,
+            "username": "Bob",
+            "total_price": 65,
+            "description": "Good",
+            "status": 1
+        },
+        {
+            "id": 4,
+            "order_number": "EC20251206169258",
+            "created_at": "2025-12-06T15:45:17.993545+08:00",
+            "update_at": "2025-12-06T15:45:17.993545+08:00",
+            "user_id": 7,
+            "username": "Bob",
+            "total_price": 99,
+            "description": "Very Good!!!",
+            "status": 1
+        }
+    ],
+    "total": 2
 }
 ```
 - 错误响应：
 ```json
-{
-    "code": 10036,
-    "message": "overstepping authority",
-    "data": null
-}
+{"code":10104,"message":"签名信息错误"}
 ```
 
 
@@ -729,6 +677,12 @@ server:
   read_timeout: 60        # 读超时（秒）
   write_timeout: 60       # 写超时（秒）
   limit_num: 100          # 限流数（每秒请求数）
+```
+
+### 语言配置
+```yaml
+language:
+  local: zh-CN  # 错误信息的显示语言，可选项：zh-CN、en-US
 ```
 
 ### 数据库配置
@@ -758,6 +712,37 @@ redis:
   pool_size: 10          # 连接池大小
   min_idle_conns: 5      # 最小空闲连接数
   max_retries: 3         # 最大重试次数
+```
+
+### 日志配置
+```yaml
+log:
+  level: info # 日志级别，可选值：debug, info, warn, error, panic, fatal
+  file_path: /var/log/gin-app/app.log # 日志文件路径
+  max_size: 100 # 最大日志文件大小为100M
+  max_age: 30   # 最大日志文件保存时间为30天
+```
+
+### 文件上传配置
+```yaml
+file:
+  dir_name: 'public/file/' # 文件上传目录
+  url_prefix: 'http://127.0.0.1:9060/api/v1/gin-app-start/file/' # 文件上传URL前缀
+  max_size: 8388608 # 最大文件上传大小为8M
+```
+
+### 会话配置
+```yaml
+session:
+  use_redis: true   # 是否使用Redis存储会话, 默认为false
+  name: 'mysession' # 会话名称
+  size: 10          # 会话大小, 默认为10
+  key: gin-session  # 会话键名
+  max_age: 120      # 会话过期时间, 默认为120秒
+  path: /           # 会话路径, 默认为"/"
+  domain: ""        # 会话域名, 默认为""
+  http_only: true   # 是否仅通过HTTP访问会话, 默认为true
+  secure: false     # 是否仅通过HTTPS访问会话, 默认为false
 ```
 
 ## Docker 部署

@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
+	Language LanguageConfig `mapstructure:"language"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Log      LogConfig      `mapstructure:"log"`
@@ -22,6 +23,10 @@ type ServerConfig struct {
 	ReadTimeout  int    `mapstructure:"read_timeout"`
 	WriteTimeout int    `mapstructure:"write_timeout"`
 	LimitNum     int    `mapstructure:"limit_num"`
+}
+
+type LanguageConfig struct {
+	Local string `mapstructure:"local"`
 }
 
 type DatabaseConfig struct {
